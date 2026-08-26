@@ -243,6 +243,18 @@
         <button class="btn sec grow" id="syncNow">Jetzt abgleichen</button>
         <button class="btn danger" id="syncOff">Trennen</button>
       </div>
+
+      <div style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px">
+        <div class="small" style="font-weight:600; margin-bottom:8px">Sicherung &amp; Wiederherstellung</div>
+        <div class="row" style="gap:8px">
+          <button class="btn sec grow" id="expBtn">⬇︎ Export (Datei)</button>
+          <button class="btn sec grow" id="impBtn">⬆︎ Import (Datei)</button>
+        </div>
+        <input type="file" id="impFile" accept="application/json,.json" style="display:none">
+        <button class="btn sec" id="restoreBtn" style="width:100%; margin-top:8px">↩︎ Aus lokaler Sicherung wiederherstellen</button>
+        <div id="restoreInfo" class="tiny muted" style="margin-top:6px"></div>
+      </div>
+
       <div class="tiny muted" style="margin-top:12px">Sync läuft nur in der echten Web-Version (z.B. Vercel), nicht in der Chat-Vorschau. Die Passphrase wird lokal auf diesem Gerät gespeichert, damit der Abgleich automatisch passiert.</div>
     </div>
   </div>
@@ -305,6 +317,13 @@ let _suppressPush=false, _pushTimer=null;
 function save(){
   if(!_suppressPush) S._rev=Date.now();
   try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast("Speichern fehlgeschlagen"); }
+  try{ // automatische lokale Sicherung des bisher größten Stands
+    const w=stateWeight(S);
+    if(w>0){
+      const cur=+(localStorage.getItem(KEY+".safeW")||0);
+      if(w>=cur){ localStorage.setItem(KEY+".safe", JSON.stringify(S)); localStorage.setItem(KEY+".safeW", String(w)); }
+    }
+  }catch(e){}
   if(!_suppressPush && S.sync && S.sync.enabled && S.sync.pass){
     clearTimeout(_pushTimer); _pushTimer=setTimeout(()=>{ syncPush().catch(()=>{}); }, 2000);
   }
@@ -1778,7 +1797,7 @@ async function syncPull(){
   const rrev=Number(j.updated_at)||0;
   if(rrev>(S._rev||0)){
     // Schutz: ein (fast) leerer Server-Stand darf einen vollen lokalen Stand nicht überschreiben
-    if(stateWeight(remote)===0 && stateWeight(S)>0) return {status:"local-newer"};
+    { const rw=stateWeight(remote), lw=stateWeight(S); if(lw>0 && rw < lw*0.5) return {status:"local-newer"}; }
     const keep=S.sync; _suppressPush=true;
     S=remote; S.sync=keep; S._rev=rrev; ensureState();
     localStorage.setItem(KEY, JSON.stringify(S)); _suppressPush=false;
@@ -1807,14 +1826,50 @@ async function syncNow(){
 }
 function syncOff(){ if(S.sync){ S.sync.enabled=false; S.sync.pass=""; } _suppressPush=true; save(); _suppressPush=false; syncStatus("Getrennt. Daten bleiben lokal auf diesem Gerät.","muted"); updateSyncBtn(); }
 
+/* ---- Sicherung / Export / Import ---- */
+function exportData(){
+  try{
+    const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob); const a=document.createElement("a");
+    a.href=url; a.download="selbstorga-backup-"+todayStr()+".json"; document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },200);
+    toast("Backup-Datei erstellt");
+  }catch(e){ toast("Export fehlgeschlagen"); }
+}
+function adoptState(obj){
+  if(!obj||typeof obj!=="object"||!Array.isArray(obj.todos)) { toast("Ungültige Daten"); return false; }
+  const keep=S.sync; _suppressPush=true; S=obj; S.sync=keep; ensureState();
+  localStorage.setItem(KEY, JSON.stringify(S)); _suppressPush=false;
+  S._rev=Date.now(); save(); render();
+  if(S.sync&&S.sync.enabled&&S.sync.pass) syncPush().catch(()=>{});
+  return true;
+}
+function importFile(file){
+  const r=new FileReader();
+  r.onload=()=>{ try{ if(adoptState(JSON.parse(r.result))) toast("Import erfolgreich ✓"); }catch(e){ toast("Import fehlgeschlagen – keine gültige Datei"); } };
+  r.readAsText(file);
+}
+function restoreBackup(){
+  try{
+    const raw=localStorage.getItem(KEY+".safe");
+    if(!raw){ toast("Keine lokale Sicherung vorhanden"); return; }
+    if(adoptState(JSON.parse(raw))) toast("Aus lokaler Sicherung wiederhergestellt ✓");
+  }catch(e){ toast("Wiederherstellung fehlgeschlagen"); }
+}
+
 /* ============================ INIT ============================ */
 $("#brandDate").textContent = "· "+new Date().toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});
-$("#syncBtn").onclick=()=>{ $("#syncSheet").classList.add("open"); const p=$("#syncPass"),a=$("#syncApi"); if(p)p.value=(S.sync&&S.sync.pass)||""; if(a)a.value=(S.sync&&S.sync.apiBase)||""; syncStatus((S.sync&&S.sync.enabled)?"Sync ist aktiv.":""); };
+$("#syncBtn").onclick=()=>{ $("#syncSheet").classList.add("open"); const p=$("#syncPass"),a=$("#syncApi"); if(p)p.value=(S.sync&&S.sync.pass)||""; if(a)a.value=(S.sync&&S.sync.apiBase)||""; syncStatus((S.sync&&S.sync.enabled)?"Sync ist aktiv.":"");
+  const ri=$("#restoreInfo"); if(ri){ const sw=+(localStorage.getItem(KEY+".safeW")||0); ri.textContent = sw>0 ? `Lokale Sicherung: ${sw} Einträge gespeichert.` : "Noch keine lokale Sicherung."; } };
 $("#syncClose").onclick=()=>$("#syncSheet").classList.remove("open");
 $("#syncSheet").onclick=e=>{ if(e.target.id==="syncSheet") $("#syncSheet").classList.remove("open"); };
 $("#syncConnect").onclick=()=>syncConnect($("#syncPass").value,$("#syncApi").value);
 $("#syncNow").onclick=syncNow;
 $("#syncOff").onclick=syncOff;
+$("#expBtn").onclick=exportData;
+$("#impBtn").onclick=()=>$("#impFile").click();
+$("#impFile").onchange=e=>{ if(e.target.files&&e.target.files[0]) importFile(e.target.files[0]); e.target.value=""; };
+$("#restoreBtn").onclick=restoreBackup;
 updateSyncBtn();
 if(S.sync&&S.sync.enabled&&S.sync.pass){ (async()=>{ try{ const pr=await syncPull(); if(pr.status==="pulled") render(); else await syncPush(); }catch(e){} })(); }
 if(!SPECIALS_LEFT.some(s=>s.k===S.ui.active) && !SPECIALS_RIGHT.some(s=>s.k===S.ui.active)
