@@ -782,31 +782,36 @@ function viewArea(id){
   noProj.sort((x,y)=>urgency(y)-urgency(x));
   if(noProj.length) html+=noProj.map(t=>todoCard(t,false)).join("");
 
-  Object.keys(groups).sort().forEach(pName=>{
-    html+=`<div class="proj-head"><span>📂 ${esc(pName)}</span>
-      <button class="link" data-splitproj="${esc(pName)}">↗ eigener Tab</button></div>`;
-    html+=groups[pName].sort((x,y)=>urgency(y)-urgency(x)).map(t=>todoCard(t,false)).join("");
-  });
-
   if(projectNames.length){
-    html+=`<div class="card section-gap"><h3>Projekte in „${esc(a.name)}"</h3>`;
-    html+=projectNames.map(p=>{
-      const o=mine.filter(t=>t.project===p && !t.done).length;
-      const dn=mine.filter(t=>t.project===p && t.done).length;
-      return `<div class="rtile" style="margin-bottom:8px">
-        <span class="ic">📂</span>
-        <div class="grow"><b>${esc(p)}</b><div class="tiny muted">${o} offen · ${dn} erledigt</div></div>
-        <button class="link" data-splitproj="${esc(p)}">↗ eigener Tab</button>
+    const collapsedMap=S.ui.collapsedProjects||{};
+    html+=`<div class="proj-head" style="margin-top:18px"><span>📂 Projekte</span></div>`;
+    projectNames.forEach(p=>{
+      const key=id+"|"+p;
+      const collapsed=!!collapsedMap[key];
+      const openP=mine.filter(t=>t.project===p && !t.done).sort((x,y)=>urgency(y)-urgency(x));
+      const doneP=mine.filter(t=>t.project===p && t.done);
+      html+=`<div class="card">
+        <div class="row center" style="justify-content:space-between; gap:8px">
+          <button class="grow" data-projtoggle="${esc(key)}" style="text-align:left; display:flex; align-items:center; gap:8px; color:var(--text)">
+            <span class="muted">${collapsed?"▶":"▼"}</span>
+            <span><b>${esc(p)}</b> <span class="tiny muted">${openP.length} offen · ${doneP.length} erledigt</span></span>
+          </button>
+          <button class="link" data-splitproj="${esc(p)}">↗ eigener Tab</button>
+        </div>
+        ${collapsed?"":`<div style="margin-top:10px">
+          ${openP.length?openP.map(t=>todoCard(t,false)).join(""):`<div class="tiny muted" style="padding:4px 0">Keine offenen To-dos.</div>`}
+          ${doneP.length?`<details style="margin-top:4px"><summary class="tiny muted" style="cursor:pointer">✓ ${doneP.length} erledigt anzeigen</summary><div style="margin-top:8px">${doneP.slice(0,20).map(t=>todoCard(t,false)).join("")}</div></details>`:""}
+        </div>`}
       </div>`;
-    }).join("");
-    html+=`</div>`;
+    });
   }
 
   if(!openT.length && !projectNames.length) html+=`<div class="empty">Noch keine To-dos in „${esc(a.name)}". Leg oben eins an.</div>`;
 
-  if(doneT.length){
-    html+=`<div class="proj-head">✓ Erledigt (${doneT.length})</div>`;
-    html+=doneT.slice(0,20).map(t=>todoCard(t,false)).join("");
+  const doneNoProj=doneT.filter(t=>!t.project);
+  if(doneNoProj.length){
+    html+=`<div class="proj-head">✓ Erledigt (${doneNoProj.length})</div>`;
+    html+=doneNoProj.slice(0,20).map(t=>todoCard(t,false)).join("");
   }
 
   const v=$("#view"); v.innerHTML=html;
@@ -826,6 +831,10 @@ function viewArea(id){
     S.areas=S.areas.filter(x=>x.id!==id); go("overview"); toast("Bereich gelöscht");
   };
   v.querySelectorAll("[data-splitproj]").forEach(b=>b.onclick=()=>splitProject(id, b.dataset.splitproj));
+  v.querySelectorAll("[data-projtoggle]").forEach(b=>b.onclick=()=>{
+    const key=b.dataset.projtoggle; S.ui.collapsedProjects=S.ui.collapsedProjects||{};
+    S.ui.collapsedProjects[key]=!S.ui.collapsedProjects[key]; save(); render();
+  });
   bindTodos(v);
 }
 async function editArea(a){
