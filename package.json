@@ -1,0 +1,10 @@
+{
+  "name": "selbstorga",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Selbstorga – persönliches Selbstorganisations-Tool (statische Web-App + optionaler Sync-Endpunkt).",
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}

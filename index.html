@@ -1,0 +1,1767 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0f1115" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Selbstorga" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236c8cff'/%3E%3Ctext x='32' y='45' font-size='38' text-anchor='middle' font-family='Arial'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E" />
+<title>Selbstorga – Leben & Arbeit</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222c; --border:#262b36;
+    --text:#e6e8ee; --muted:#9aa3b2; --muted2:#6b7382;
+    --accent:#6c8cff; --accent-dim:#2b3350;
+    --good:#46c98b; --warn:#f5a524; --bad:#f26d6d; --purple:#b78cff;
+    --radius:14px; --tap:44px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:16px; line-height:1.4; overscroll-behavior-y:none}
+  body{padding-bottom:env(safe-area-inset-bottom)}
+  button,input,select,textarea{font:inherit; color:inherit}
+  button{cursor:pointer; border:none; background:none}
+  input,select,textarea{background:var(--panel2); border:1px solid var(--border);
+    color:var(--text); border-radius:10px; padding:10px 12px; width:100%; outline:none}
+  input:focus,select,textarea:focus{border-color:var(--accent)}
+  textarea{resize:vertical; min-height:60px}
+  a{color:var(--accent)}
+  .muted{color:var(--muted)} .small{font-size:13px} .tiny{font-size:12px}
+
+  header.topbar{position:sticky; top:0; z-index:30; background:rgba(15,17,21,.92);
+    backdrop-filter:blur(8px); border-bottom:1px solid var(--border);
+    padding:calc(env(safe-area-inset-top) + 10px) 14px 0}
+  .brand{display:flex; align-items:center; gap:8px; font-weight:700; letter-spacing:.2px}
+  .brand .logo{width:26px;height:26px;border-radius:8px;background:var(--accent);
+    display:grid;place-items:center;color:#fff;font-size:16px}
+  .brand small{font-weight:500; color:var(--muted); font-size:12px}
+
+  .tabbar{display:flex; gap:6px; overflow-x:auto; padding:10px 0 8px; scrollbar-width:none}
+  .tabbar::-webkit-scrollbar{display:none}
+  .tab{flex:0 0 auto; padding:8px 13px; border-radius:999px; background:var(--panel);
+    border:1px solid var(--border); color:var(--muted); font-size:14px; white-space:nowrap;
+    display:flex; align-items:center; gap:6px; min-height:38px}
+  .tab.active{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600}
+  .tab .dot{width:8px;height:8px;border-radius:50%}
+  .tab.add{color:var(--accent); font-weight:700}
+
+  main{padding:14px 14px 96px; max-width:760px; margin:0 auto}
+  .view-title{font-size:22px; font-weight:750; margin:4px 0 2px}
+  .view-sub{color:var(--muted); font-size:14px; margin-bottom:14px}
+
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px; margin-bottom:12px}
+  .card h3{margin:0 0 10px; font-size:15px; letter-spacing:.3px; text-transform:uppercase; color:var(--muted)}
+  .section-gap{margin-top:22px}
+
+  .row{display:flex; gap:8px} .row.wrap{flex-wrap:wrap} .row.center{align-items:center}
+  .grow{flex:1 1 auto; min-width:0}
+  .btn{background:var(--accent); color:#fff; border-radius:10px; padding:11px 14px;
+    font-weight:600; min-height:var(--tap); display:inline-flex; align-items:center; justify-content:center; gap:6px}
+  .btn.sec{background:var(--panel2); border:1px solid var(--border); color:var(--text); font-weight:500}
+  .btn.ghost{background:transparent; color:var(--muted); padding:8px}
+  .btn.sm{padding:7px 10px; min-height:36px; font-size:13px}
+  .btn.danger{background:transparent; color:var(--bad); border:1px solid var(--border)}
+
+  .todo{background:var(--panel); border:1px solid var(--border); border-radius:12px; margin-bottom:10px; overflow:hidden}
+  .todo.done{opacity:.55}
+  .todo-head{display:flex; align-items:flex-start; gap:10px; padding:12px}
+  .check{flex:0 0 auto; width:24px;height:24px;border-radius:7px;border:2px solid var(--muted2);
+    background:transparent; margin-top:1px; display:grid; place-items:center; color:#fff; font-size:15px}
+  .check.on{background:var(--good); border-color:var(--good)}
+  .todo-main{flex:1 1 auto; min-width:0}
+  .todo-title{font-weight:600; word-break:break-word}
+  .todo.done .todo-title{text-decoration:line-through}
+  .badges{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px}
+  .badge{font-size:12px; padding:3px 8px; border-radius:999px; background:var(--panel2);
+    border:1px solid var(--border); color:var(--muted); display:inline-flex; align-items:center; gap:4px}
+  .badge.due-over{color:#fff; background:var(--bad); border-color:var(--bad)}
+  .badge.due-soon{color:#111; background:var(--warn); border-color:var(--warn)}
+  .badge.follow{color:#111; background:var(--purple); border-color:var(--purple)}
+  .pdot{width:9px;height:9px;border-radius:50%}
+  .p3{background:var(--bad)} .p2{background:var(--warn)} .p1{background:var(--muted2)}
+  .chev{color:var(--muted); padding:6px; align-self:center}
+  .todo-detail{border-top:1px solid var(--border); padding:12px; display:none; background:var(--panel2)}
+  .todo.open .todo-detail{display:block}
+  .field{margin-bottom:10px}
+  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:4px}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .ms{display:flex; align-items:center; gap:8px; padding:6px 0}
+  .ms .mscheck{width:20px;height:20px;border-radius:6px;border:2px solid var(--muted2);flex:0 0 auto;display:grid;place-items:center;font-size:12px}
+  .ms .mscheck.on{background:var(--good);border-color:var(--good)}
+  .ms.done span{text-decoration:line-through; color:var(--muted)}
+
+  .proj-head{display:flex; align-items:center; justify-content:space-between; gap:8px;
+    margin:16px 0 8px; color:var(--muted); font-size:13px; font-weight:600; letter-spacing:.4px; text-transform:uppercase}
+
+  .empty{color:var(--muted2); text-align:center; padding:26px 10px; font-size:14px}
+
+  /* routines */
+  .rgrid{display:grid; gap:10px}
+  .rtile{display:flex; align-items:center; gap:12px; background:var(--panel2); border:1px solid var(--border);
+    border-radius:12px; padding:12px}
+  .rtile .ic{font-size:22px}
+  .rbtns{display:flex; gap:6px; flex:0 0 auto}
+  .rtoggle{width:34px;height:34px;border-radius:50%;border:2px solid var(--muted2);flex:0 0 auto;display:grid;place-items:center;font-size:16px;color:var(--muted2)}
+  .rtoggle.yes.on{background:var(--good);border-color:var(--good);color:#fff}
+  .rtoggle.no.on{background:var(--bad);border-color:var(--bad);color:#fff}
+  .score-big{font-size:40px; font-weight:800; line-height:1}
+  .ring{--p:0; width:96px;height:96px;border-radius:50%; flex:0 0 auto;
+    background:conic-gradient(var(--good) calc(var(--p)*1%), var(--panel2) 0);
+    display:grid; place-items:center}
+  .ring .inner{width:76px;height:76px;border-radius:50%;background:var(--panel);display:grid;place-items:center;flex-direction:column;text-align:center}
+  .bars{display:flex; align-items:flex-end; gap:4px; height:70px; margin-top:6px}
+  .bars .b{flex:1; background:var(--accent-dim); border-radius:4px 4px 0 0; position:relative; min-height:3px}
+  .bars .b>i{position:absolute; inset:auto 0 0 0; background:var(--good); border-radius:4px 4px 0 0}
+  .stat{flex:1; text-align:center; background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:12px 8px}
+  .stat b{font-size:22px; display:block}
+  .foc{display:flex; gap:8px}
+  .foc button{flex:1; padding:10px 0; border-radius:10px; background:var(--panel2); border:1px solid var(--border)}
+  .foc button.on{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700}
+
+  /* mood sliders + mind */
+  input[type=range]{-webkit-appearance:none; appearance:none; height:6px; border-radius:999px;
+    background:var(--panel2); border:1px solid var(--border); padding:0; width:100%}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:22px; height:22px; border-radius:50%;
+    background:var(--accent); cursor:pointer; border:2px solid var(--panel)}
+  input[type=range]::-moz-range-thumb{width:22px; height:22px; border-radius:50%;
+    background:var(--accent); cursor:pointer; border:2px solid var(--panel)}
+  .mfield{margin-bottom:12px}
+  .qauthor{color:var(--muted); font-size:13px; margin-top:10px}
+
+  /* chat */
+  .fab{position:fixed; right:16px; bottom:calc(16px + env(safe-area-inset-bottom)); z-index:40;
+    width:58px;height:58px;border-radius:50%; background:var(--accent); color:#fff; font-size:24px;
+    box-shadow:0 8px 24px rgba(0,0,0,.45); display:grid; place-items:center}
+  .sheet{position:fixed; inset:0; z-index:50; background:rgba(0,0,0,.5); display:none}
+  .sheet.open{display:block}
+  .sheet-inner{position:absolute; left:0; right:0; bottom:0; max-height:88vh; background:var(--panel);
+    border-radius:18px 18px 0 0; border-top:1px solid var(--border); display:flex; flex-direction:column}
+  .sheet-head{display:flex; align-items:center; justify-content:space-between; padding:14px; border-bottom:1px solid var(--border)}
+  .chatlog{flex:1 1 auto; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px}
+  .bub{max-width:82%; padding:10px 13px; border-radius:14px; font-size:14px; white-space:pre-wrap; word-break:break-word}
+  .bub.me{align-self:flex-end; background:var(--accent); color:#fff; border-bottom-right-radius:5px}
+  .bub.bot{align-self:flex-start; background:var(--panel2); border:1px solid var(--border); border-bottom-left-radius:5px}
+  .chat-input{display:flex; gap:8px; padding:12px; padding-bottom:calc(12px + env(safe-area-inset-bottom)); border-top:1px solid var(--border)}
+
+  .toast{position:fixed; left:50%; bottom:90px; transform:translateX(-50%) translateY(20px);
+    background:var(--panel2); border:1px solid var(--border); color:var(--text); padding:11px 16px;
+    border-radius:999px; font-size:14px; opacity:0; transition:.25s; z-index:60; pointer-events:none; max-width:90vw}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+
+  .pill{display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px;
+    background:var(--panel2); border:1px solid var(--border); font-size:13px; color:var(--muted)}
+  .quote{font-size:19px; font-weight:650; line-height:1.35}
+  .divider{height:1px; background:var(--border); margin:14px 0}
+  .link{color:var(--accent); font-size:13px}
+  .seg{display:flex; background:var(--panel2); border:1px solid var(--border); border-radius:10px; overflow:hidden}
+  .seg button{flex:1; padding:9px 0; font-size:13px; color:var(--muted)}
+  .seg button.on{background:var(--accent); color:#fff; font-weight:600}
+  .catrow{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px}
+  .catchip{padding:6px 11px; border-radius:999px; background:var(--panel); border:1px solid var(--border); font-size:13px; color:var(--muted)}
+  .catchip.on{background:var(--accent); border-color:var(--accent); color:#fff}
+
+  /* chat tab (WhatsApp-Look) */
+  .wa{display:flex; flex-direction:column; height:calc(100dvh - 210px); min-height:340px}
+  .wa-head{padding:2px 2px 10px; display:flex; gap:8px; align-items:baseline; flex-wrap:wrap}
+  .wa-log{flex:1 1 auto; overflow-y:auto; padding:14px; border-radius:14px; background:#0b141a;
+    border:1px solid var(--border); display:flex; flex-direction:column; gap:8px}
+  .wa-bubble{max-width:85%; padding:9px 12px; border-radius:12px; font-size:14px; white-space:pre-wrap; word-break:break-word; line-height:1.4}
+  .wa-bubble.me{align-self:flex-end; background:#005c4b; color:#e9fff5; border-bottom-right-radius:4px}
+  .wa-bubble.bot{align-self:flex-start; background:#202c33; color:#e6e8ee; border-bottom-left-radius:4px}
+  .wa-input{display:flex; gap:8px; margin-top:10px; align-items:center}
+  .wa-send{background:var(--good); color:#04231b; width:46px; height:46px; border-radius:50%; font-size:18px; flex:0 0 auto; display:grid; place-items:center; font-weight:700}
+  .wa-mic{background:var(--panel2); border:1px solid var(--border); color:var(--text); width:46px; height:46px; border-radius:50%; font-size:18px; flex:0 0 auto}
+  .wa-mic.rec,.btn.rec{background:var(--bad); color:#fff; border-color:var(--bad); animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  @media (prefers-reduced-motion: reduce){ .wa-mic.rec,.btn.rec{animation:none} }
+
+  /* goals */
+  .gbar{height:10px; border-radius:999px; background:var(--panel2); border:1px solid var(--border); overflow:hidden; margin:8px 0}
+  .gbar>i{display:block; height:100%; background:var(--good)}
+  .gsug{display:inline-flex; align-items:center; gap:6px; padding:7px 11px; border-radius:999px; background:var(--panel2); border:1px solid var(--border); font-size:13px; margin:0 6px 6px 0; color:var(--text)}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="row center" style="justify-content:space-between">
+    <div class="brand">
+      <span class="logo">✦</span>
+      <span>Selbstorga <small id="brandDate"></small></span>
+    </div>
+    <button class="btn ghost" id="syncBtn" title="Geräte-Sync" style="font-size:20px; padding:6px 10px">⟳</button>
+  </div>
+  <nav class="tabbar" id="tabbar"></nav>
+</header>
+
+<main id="view"></main>
+
+<button class="fab" id="fab" aria-label="Chat">💬</button>
+
+<div class="sheet" id="chatSheet">
+  <div class="sheet-inner" style="height:82vh">
+    <div class="sheet-head">
+      <b>Chat · To-do erfassen</b>
+      <button class="btn ghost" id="chatClose">✕</button>
+    </div>
+    <div class="chatlog" id="chatlog"></div>
+    <div class="chat-input">
+      <button class="btn sec" id="chatMic" title="Spracheingabe" style="min-height:44px; padding:0 12px">🎤</button>
+      <input id="chatInput" class="grow" placeholder="z.B. Angebot schreiben bis Freitag wichtig Arbeit" autocomplete="off" />
+      <button class="btn" id="chatSend">➤</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="modal">
+  <div class="sheet-inner" style="border-radius:18px; left:14px; right:14px; bottom:auto; top:50%; transform:translateY(-50%); max-width:420px; margin:0 auto">
+    <div class="sheet-head"><b id="modalTitle">Titel</b><button class="btn ghost" id="modalX">✕</button></div>
+    <div id="modalBody" style="padding:14px"></div>
+    <div class="row" style="padding:0 14px 16px; gap:8px">
+      <button class="btn sec grow" id="modalCancel">Abbrechen</button>
+      <button class="btn grow" id="modalOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="syncSheet">
+  <div class="sheet-inner" style="border-radius:18px; left:14px; right:14px; bottom:auto; top:50%; transform:translateY(-50%); max-width:440px; margin:0 auto; max-height:90vh; overflow:auto">
+    <div class="sheet-head"><b>Geräte-Sync</b><button class="btn ghost" id="syncClose">✕</button></div>
+    <div style="padding:14px">
+      <div class="small muted" style="margin-bottom:12px">Dieselbe <b>Passphrase</b> auf allen Geräten = dieselben Daten. Alles wird <b>vor dem Hochladen verschlüsselt</b> (Ende-zu-Ende) – Server und Datenbank sehen nichts Lesbares. Wähl eine lange, einzigartige Passphrase; sie kann nicht wiederhergestellt werden.</div>
+      <div class="field"><label>Passphrase</label><input id="syncPass" type="password" placeholder="z.B. drei zufällige Wörter + Zahl" autocomplete="off"></div>
+      <div class="field"><label>Sync-Server (optional)</label><input id="syncApi" placeholder="Standard: gleiche Adresse + /api/sync"></div>
+      <div id="syncStatus" class="small" style="margin:6px 0 12px; min-height:18px"></div>
+      <button class="btn" id="syncConnect" style="width:100%">Verbinden &amp; abgleichen</button>
+      <div class="row" style="gap:8px; margin-top:8px">
+        <button class="btn sec grow" id="syncNow">Jetzt abgleichen</button>
+        <button class="btn danger" id="syncOff">Trennen</button>
+      </div>
+      <div class="tiny muted" style="margin-top:12px">Sync läuft nur in der echten Web-Version (z.B. Vercel), nicht in der Chat-Vorschau. Die Passphrase wird lokal auf diesem Gerät gespeichert, damit der Abgleich automatisch passiert.</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ============================ STATE & PERSISTENCE ============================ */
+const KEY = "selbstorga.v1";
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const todayStr = () => new Date().toISOString().slice(0,10);
+
+const DEFAULT_ROUTINES = [
+  {id:"r_workout", name:"Workout", icon:"🏋️"},
+  {id:"r_lavita",  name:"LaVita getrunken", icon:"🥤"},
+  {id:"r_medi",    name:"Meditiert", icon:"🧘"},
+  {id:"r_komfort", name:"Komfortzone verlassen", icon:"🚀"},
+  {id:"r_freund",  name:"Freund/in kontaktiert", icon:"💬"},
+];
+
+function seed(){
+  return {
+    v:1,
+    areas:[
+      {id:"a_arbeit", name:"Arbeit", icon:"💼", color:"#6c8cff"},
+      {id:"a_privat", name:"Privat", icon:"🏠", color:"#46c98b"},
+    ],
+    todos:[],
+    routines: DEFAULT_ROUTINES.map(r=>({...r})),
+    routineLog:{},   // 'YYYY-MM-DD': { done:{rid:true|false}, focus:1-5 }
+    ideas:[],        // {id,topic,title,notes,ts}
+    wishes:[],       // {id,cat,title,notes,done,ts}
+    mind:{},         // legacy 'YYYY-MM-DD': answer (migrated to mindAnswers)
+    mindAnswers:{},  // 'YYYY-MM-DD': {q, a}
+    mindDayQ:{}, mindDayR:{}, mindDayQuote:{},
+    mindAskedQ:[], mindAskedR:[], mindAskedQuote:[],
+    valuesDayQ:{}, valuesAns:{}, valuesAsked:[],
+    mood:{},         // 'YYYY-MM-DD': { morning:{...}, evening:{...} }
+    startDate:null,
+    sync:{enabled:false, pass:"", apiBase:""},
+    _rev:0,
+    chat:[],         // {role:'me'|'bot', text, ts}
+    suggested:[],    // wish titles already suggested
+    savedReminders:[], // [{text, ts}] gespeicherte Lebens-Erinnerungen
+    goals:[],        // {id, title, cat:'privat'|'beruflich', keywords:[], checks:[{date,rating,note}], created}
+    myThoughts:[],   // {id, text, source, ts} eigene kluge Gedanken
+    dismissedGoalSug:[], // abgelehnte Ziel-Vorschläge (keywords)
+    bookmarks:[],    // {id, url, title, cat, auto, ts}
+    ui:{active:"overview"}
+  };
+}
+let S;
+try{ S = JSON.parse(localStorage.getItem(KEY)) || seed(); }catch(e){ S = seed(); }
+if(!S.areas) S = seed();
+let _suppressPush=false, _pushTimer=null;
+function save(){
+  if(!_suppressPush) S._rev=Date.now();
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast("Speichern fehlgeschlagen"); }
+  if(!_suppressPush && S.sync && S.sync.enabled && S.sync.pass){
+    clearTimeout(_pushTimer); _pushTimer=setTimeout(()=>{ syncPush().catch(()=>{}); }, 2000);
+  }
+}
+function ensureState(){
+  const defs={ mindAnswers:{}, mindDayQ:{}, mindDayR:{}, mindDayQuote:{}, mindAskedQ:[], mindAskedR:[],
+    mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{},
+    savedReminders:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[],
+    sync:{enabled:false, pass:"", apiBase:""} };
+  for(const k in defs){ if(S[k]==null) S[k]=defs[k]; }
+  if(S._rev==null) S._rev=0;
+  if(!S.startDate) S.startDate=todayStr();
+  if(S.mind && typeof S.mind==="object"){        // migrate legacy string answers
+    for(const k in S.mind){
+      if(/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof S.mind[k]==="string" && S.mind[k] && !S.mindAnswers[k])
+        S.mindAnswers[k]={q:null, a:S.mind[k]};
+    }
+  }
+}
+ensureState();
+
+/* ============================ HELPERS ============================ */
+const $ = sel => document.querySelector(sel);
+const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const WD = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+const WDS= ["So","Mo","Di","Mi","Do","Fr","Sa"];
+
+function toast(msg){
+  const t=$("#toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),2200);
+}
+/* custom modal dialogs (sandbox-safe replacements for prompt/confirm) */
+function closeModal(){ $("#modal").classList.remove("open"); }
+function uiConfirm(msg, okLabel="OK"){
+  return new Promise(res=>{
+    $("#modalTitle").textContent="Bestätigen";
+    $("#modalBody").innerHTML=`<div>${esc(msg)}</div>`;
+    $("#modalOk").textContent=okLabel;
+    const m=$("#modal"); m.classList.add("open");
+    const done=v=>{ closeModal(); res(v); };
+    $("#modalOk").onclick=()=>done(true);
+    $("#modalCancel").onclick=()=>done(false);
+    $("#modalX").onclick=()=>done(false);
+    m.onclick=e=>{ if(e.target.id==="modal") done(false); };
+  });
+}
+function uiPrompt(title, fields, okLabel="Speichern"){
+  return new Promise(res=>{
+    $("#modalTitle").textContent=title;
+    $("#modalBody").innerHTML=fields.map((f,i)=>`
+      <div class="field"><label>${esc(f.label)}</label>
+      <input data-mp="${i}" value="${esc(f.value||"")}" placeholder="${esc(f.placeholder||"")}"></div>`).join("");
+    $("#modalOk").textContent=okLabel;
+    const m=$("#modal"); m.classList.add("open");
+    const first=$("#modalBody input"); if(first) setTimeout(()=>first.focus(),80);
+    const collect=()=>{ const o={}; $("#modalBody").querySelectorAll("[data-mp]").forEach(inp=>o[fields[inp.dataset.mp].key]=inp.value.trim()); return o; };
+    const done=v=>{ closeModal(); res(v); };
+    $("#modalOk").onclick=()=>done(collect());
+    $("#modalCancel").onclick=()=>done(null);
+    $("#modalX").onclick=()=>done(null);
+    m.onclick=e=>{ if(e.target.id==="modal") done(null); };
+    $("#modalBody").querySelectorAll("input").forEach(inp=>inp.onkeydown=e=>{ if(e.key==="Enter") done(collect()); });
+  });
+}
+function fmtDate(iso){
+  if(!iso) return "";
+  const d=new Date(iso+"T00:00:00");
+  return WDS[d.getDay()]+", "+d.getDate()+"."+(d.getMonth()+1)+".";
+}
+function daysUntil(iso){
+  if(!iso) return null;
+  const a=new Date(todayStr()+"T00:00:00"), b=new Date(iso+"T00:00:00");
+  return Math.round((b-a)/86400000);
+}
+function addDaysISO(iso, n){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function last(n){ const out=[]; let d=todayStr(); for(let i=0;i<n;i++){ out.unshift(d); d=addDaysISO(d,-1);} return out; }
+function areaById(id){ return S.areas.find(a=>a.id===id); }
+
+/* urgency score for sorting */
+function urgency(t){
+  let s = t.priority*20;
+  const du = daysUntil(t.dueDate);
+  if(du!==null){ if(du<0) s+=200 - du; else s += Math.max(0, 60-du); }
+  const fu = daysUntil(t.followUpDate);
+  if(fu!==null && fu<=0) s+=40;
+  return s;
+}
+
+/* ============================ DATE / CHAT PARSER ============================ */
+function parseGermanDate(text){
+  const t = text.toLowerCase();
+  const today = todayStr();
+  let m;
+  if(/\bübermorgen\b/.test(t)) return {iso:addDaysISO(today,2), match:"übermorgen"};
+  if(/\bmorgen\b/.test(t))     return {iso:addDaysISO(today,1), match:"morgen"};
+  if(/\bheute\b/.test(t))      return {iso:today, match:"heute"};
+  if((m=t.match(/in\s+(\d+)\s*(tag|tagen|woche|wochen)/))){
+    const n=+m[1]; const days=/woche/.test(m[2])?n*7:n; return {iso:addDaysISO(today,days), match:m[0]};
+  }
+  if(/nächste\s+woche/.test(t)) return {iso:addDaysISO(today,7), match:"nächste woche"};
+  // weekday name -> next occurrence
+  const wdmap={sonntag:0,montag:1,dienstag:2,mittwoch:3,donnerstag:4,freitag:5,samstag:6};
+  for(const [name,idx] of Object.entries(wdmap)){
+    if(new RegExp("\\b"+name+"\\b").test(t)){
+      const cur=new Date(today+"T00:00:00").getDay();
+      let diff=(idx-cur+7)%7; if(diff===0) diff=7;
+      return {iso:addDaysISO(today,diff), match:name};
+    }
+  }
+  // DD.MM(.YYYY)?
+  if((m=t.match(/(\d{1,2})\.(\d{1,2})\.(\d{2,4})?/))){
+    const d=+m[1], mo=+m[2]; let y=m[3]?+m[3]:new Date().getFullYear();
+    if(y<100) y+=2000;
+    let iso=`${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    if(!m[3] && iso<today) iso=`${y+1}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    return {iso, match:m[0]};
+  }
+  return null;
+}
+function parsePriority(text){
+  const t=text.toLowerCase();
+  if(/(wichtig|dringend|asap|!!!|sofort|hohe? prio|prio\s*hoch|kritisch)/.test(t)) return {p:3, match:t.match(/(wichtig|dringend|asap|!!!|sofort|hohe? prio|prio\s*hoch|kritisch)/)[0]};
+  if(/(unwichtig|irgendwann|niedrig|kann warten|low prio|später)/.test(t)) return {p:1, match:t.match(/(unwichtig|irgendwann|niedrig|kann warten|low prio|später)/)[0]};
+  return {p:2, match:null};
+}
+function parseArea(text){
+  const t=text.toLowerCase();
+  // explicit "bereich X" / "in X" / "für X"
+  for(const a of S.areas){
+    if(new RegExp("\\b"+a.name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\b").test(t))
+      return {id:a.id, match:a.name.toLowerCase(), created:false};
+  }
+  let m=t.match(/(?:bereich|unter|für|in)\s+([a-zäöüß][\wäöüß-]{2,})/);
+  if(m){
+    const name=m[1];
+    const ex=S.areas.find(a=>a.name.toLowerCase()===name);
+    if(ex) return {id:ex.id, match:m[0], created:false};
+  }
+  return null;
+}
+function ensureInbox(){
+  let a=S.areas.find(a=>a.id==="a_eingang");
+  if(!a){ a={id:"a_eingang", name:"Eingang", icon:"📥", color:"#f5a524"}; S.areas.push(a); }
+  return a;
+}
+function parseTodo(raw){
+  let title=raw.trim();
+  const date=parseGermanDate(raw);
+  const pr=parsePriority(raw);
+  const ar=parseArea(raw);
+  // follow-up: "nachhaken ..." captured separately
+  let followUp=null; const fm=raw.toLowerCase().match(/nachhak\w*\s+(?:am\s+|in\s+)?([^,;.]+)/);
+  if(fm){ const fd=parseGermanDate(fm[1]); if(fd){ followUp=fd.iso; title=title.replace(new RegExp("nachhak\\w*\\s+(am\\s+|in\\s+)?"+fd.match,"i"),""); } }
+  // strip matched tokens from title
+  const strip=[];
+  if(date) strip.push(date.match);
+  if(pr.match) strip.push(pr.match);
+  if(ar && ar.match) strip.push(ar.match);
+  strip.push("bis","fällig","frist","bereich","für","unter","prio");
+  for(const s of strip){ if(s) title=title.replace(new RegExp("\\b"+s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\b","ig")," "); }
+  title=title.replace(/\s{2,}/g," ").replace(/^[\s,:;-]+|[\s,:;-]+$/g,"").trim();
+  if(!title) title=raw.trim();
+  let areaId, created=false;
+  if(ar){ areaId=ar.id; } else { areaId=ensureInbox().id; }
+  return {
+    title, priority:pr.p, dueDate:date?date.iso:null, followUpDate:followUp,
+    areaId, areaCreated:created
+  };
+}
+
+/* ============================ TODO OPS ============================ */
+function addTodo(o){
+  const t={id:uid(), areaId:o.areaId, title:o.title, notes:o.notes||"", project:o.project||"",
+    priority:o.priority||2, dueDate:o.dueDate||null, followUpDate:o.followUpDate||null,
+    done:false, doneAt:null, createdAt:todayStr(), open:false, milestones:[]};
+  S.todos.unshift(t); save(); return t;
+}
+function toggleTodo(id){
+  const t=S.todos.find(x=>x.id===id); if(!t) return;
+  t.done=!t.done; t.doneAt=t.done?todayStr():null; save(); render();
+  if(t.done) toast("Erledigt ✓");
+}
+function delTodo(id){ S.todos=S.todos.filter(x=>x.id!==id); save(); render(); }
+
+/* ============================ RENDER: TABS ============================ */
+const SPECIALS_LEFT=[{k:"overview", icon:"🏠", name:"Übersicht"}];
+const SPECIALS_RIGHT=[
+  {k:"goals",    icon:"🎯", name:"Ziele"},
+  {k:"routines", icon:"🔁", name:"Routinen"},
+  {k:"mind",     icon:"🧠", name:"Mind"},
+  {k:"ideas",    icon:"💡", name:"Ideen"},
+  {k:"bookmarks",icon:"🔖", name:"Lesezeichen"},
+  {k:"wishes",   icon:"🌟", name:"Wünsche"},
+  {k:"chat",     icon:"💬", name:"Chat"},
+];
+function renderTabs(){
+  const bar=$("#tabbar"); bar.innerHTML="";
+  const mk=(active,html,onclick,cls="")=>{
+    const b=document.createElement("button");
+    b.className="tab "+(active?"active ":"")+cls; b.innerHTML=html; b.onclick=onclick; return b;
+  };
+  SPECIALS_LEFT.forEach(s=>bar.appendChild(mk(S.ui.active===s.k, `${s.icon} ${s.name}`, ()=>go(s.k))));
+  S.areas.forEach(a=>{
+    bar.appendChild(mk(S.ui.active==="area:"+a.id,
+      `<span class="dot" style="background:${a.color}"></span>${esc(a.icon||"")} ${esc(a.name)}`,
+      ()=>go("area:"+a.id)));
+  });
+  bar.appendChild(mk(false, "＋", addArea, "add"));
+  SPECIALS_RIGHT.forEach(s=>bar.appendChild(mk(S.ui.active===s.k, `${s.icon} ${s.name}`, ()=>go(s.k))));
+}
+function go(k){ S.ui.active=k; save(); render(); window.scrollTo(0,0); }
+async function addArea(){
+  const r=await uiPrompt("Neuer Bereich / Tab",[
+    {key:"name",label:"Name",placeholder:"z.B. Finanzen"},
+    {key:"icon",label:"Emoji (optional)",value:"📁"}],"Anlegen");
+  if(!r||!r.name) return;
+  const colors=["#6c8cff","#46c98b","#f5a524","#b78cff","#f26d6d","#4dd0e1","#ff8fa3"];
+  const a={id:"a_"+uid(), name:r.name, icon:r.icon||"📁", color:colors[S.areas.length%colors.length]};
+  S.areas.push(a); go("area:"+a.id); toast("Bereich angelegt");
+}
+
+/* ============================ RENDER ROUTER ============================ */
+function render(){
+  renderTabs();
+  const k=S.ui.active;
+  if(k==="overview") return viewOverview();
+  if(k==="routines") return viewRoutines();
+  if(k==="mind")     return viewMind();
+  if(k==="ideas")    return viewIdeas();
+  if(k==="wishes")   return viewWishes();
+  if(k==="goals")    return viewGoals();
+  if(k==="bookmarks")return viewBookmarks();
+  if(k==="chat")     return viewChat();
+  if(k.startsWith("area:")) return viewArea(k.slice(5));
+  viewOverview();
+}
+
+/* ============================ TODO CARD (shared) ============================ */
+function todoCard(t, showArea){
+  const a=areaById(t.areaId);
+  const du=daysUntil(t.dueDate), fu=daysUntil(t.followUpDate);
+  const dueCls = du===null?"":(du<0?"due-over":(du<=2?"due-soon":""));
+  const msDone=t.milestones.filter(m=>m.done).length;
+  const badges=[];
+  badges.push(`<span class="badge"><span class="pdot p${t.priority}"></span>${["","niedrig","mittel","hoch"][t.priority]}</span>`);
+  if(t.dueDate) badges.push(`<span class="badge ${dueCls}">⏳ ${fmtDate(t.dueDate)}${du<0?" (überf.)":du===0?" (heute)":""}</span>`);
+  if(t.followUpDate && fu<=0) badges.push(`<span class="badge follow">🔔 nachhaken</span>`);
+  else if(t.followUpDate) badges.push(`<span class="badge">🔔 ${fmtDate(t.followUpDate)}</span>`);
+  if(t.milestones.length) badges.push(`<span class="badge">☑ ${msDone}/${t.milestones.length}</span>`);
+  if(showArea && a) badges.push(`<span class="badge"><span class="pdot" style="background:${a.color}"></span>${esc(a.name)}</span>`);
+  if(t.project) badges.push(`<span class="badge">📂 ${esc(t.project)}</span>`);
+
+  return `<div class="todo ${t.done?"done":""} ${t.open?"open":""}" data-id="${t.id}">
+    <div class="todo-head">
+      <button class="check ${t.done?"on":""}" data-act="toggle">${t.done?"✓":""}</button>
+      <div class="todo-main" data-act="open">
+        <div class="todo-title">${esc(t.title)}</div>
+        <div class="badges">${badges.join("")}</div>
+      </div>
+      <button class="chev" data-act="open">${t.open?"▲":"▼"}</button>
+    </div>
+    <div class="todo-detail">
+      <div class="field"><label>Notiz</label><textarea data-f="notes" placeholder="Notizen…">${esc(t.notes)}</textarea></div>
+      <div class="grid2">
+        <div class="field"><label>Wichtigkeit</label>
+          <select data-f="priority">
+            <option value="3" ${t.priority===3?"selected":""}>Hoch</option>
+            <option value="2" ${t.priority===2?"selected":""}>Mittel</option>
+            <option value="1" ${t.priority===1?"selected":""}>Niedrig</option>
+          </select></div>
+        <div class="field"><label>Bereich</label>
+          <select data-f="areaId">${S.areas.map(x=>`<option value="${x.id}" ${x.id===t.areaId?"selected":""}>${esc(x.name)}</option>`).join("")}</select></div>
+        <div class="field"><label>Frist (erledigt bis)</label><input type="date" data-f="dueDate" value="${t.dueDate||""}"></div>
+        <div class="field"><label>Nachhaken am</label><input type="date" data-f="followUpDate" value="${t.followUpDate||""}"></div>
+      </div>
+      <div class="field"><label>Projekt (optional – gruppiert im Bereich)</label><input data-f="project" list="projListArea" value="${esc(t.project)}" placeholder="z.B. Website Relaunch"></div>
+      <div class="field"><label>Milestones / Teilschritte</label>
+        <div data-ms>${t.milestones.map(m=>`
+          <div class="ms ${m.done?"done":""}" data-mid="${m.id}">
+            <button class="mscheck ${m.done?"on":""}" data-act="ms-toggle">${m.done?"✓":""}</button>
+            <span class="grow">${esc(m.title)}</span>
+            <button class="btn ghost" data-act="ms-del">✕</button>
+          </div>`).join("")}</div>
+        <div class="row" style="margin-top:6px">
+          <input class="grow" data-msnew placeholder="Teilschritt hinzufügen…">
+          <button class="btn sm" data-act="ms-add">＋</button>
+        </div>
+      </div>
+      <div class="row" style="justify-content:space-between; margin-top:6px">
+        <button class="btn danger sm" data-act="del">Löschen</button>
+        <span class="tiny muted">angelegt ${fmtDate(t.createdAt)}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* delegated handlers for todo cards */
+function bindTodos(root){
+  root.querySelectorAll(".todo").forEach(el=>{
+    const id=el.dataset.id;
+    const t=S.todos.find(x=>x.id===id); if(!t) return;
+    el.querySelectorAll("[data-act]").forEach(btn=>{
+      btn.addEventListener("click", ev=>{
+        const act=btn.dataset.act;
+        if(act==="toggle"){ ev.stopPropagation(); toggleTodo(id); return; }
+        if(act==="open"){ t.open=!t.open; save(); render(); return; }
+        if(act==="del"){ uiConfirm("To-do löschen?","Löschen").then(ok=>{ if(ok) delTodo(id); }); return; }
+        if(act==="ms-add"){
+          const inp=el.querySelector("[data-msnew]"); const v=inp.value.trim(); if(!v) return;
+          t.milestones.push({id:uid(), title:v, done:false}); save(); render(); return;
+        }
+        if(act==="ms-toggle"){ const mid=btn.closest("[data-mid]").dataset.mid; const m=t.milestones.find(x=>x.id===mid); m.done=!m.done; save(); render(); return; }
+        if(act==="ms-del"){ const mid=btn.closest("[data-mid]").dataset.mid; t.milestones=t.milestones.filter(x=>x.id!==mid); save(); render(); return; }
+      });
+    });
+    el.querySelectorAll("[data-f]").forEach(inp=>{
+      inp.addEventListener("change", ()=>{
+        let v=inp.value; const f=inp.dataset.f;
+        if(f==="priority") v=+v;
+        if(f==="dueDate"||f==="followUpDate") v=v||null;
+        t[f]=v; save();
+        if(f==="areaId"||f==="project"||f==="priority"||f==="dueDate") render();
+      });
+    });
+  });
+}
+
+/* ============================ VIEW: OVERVIEW ============================ */
+function viewOverview(){
+  const open=S.todos.filter(t=>!t.done);
+  const sorted=[...open].sort((a,b)=>urgency(b)-urgency(a));
+  const top=sorted.slice(0,12);
+  const overdue=open.filter(t=>daysUntil(t.dueDate)!==null && daysUntil(t.dueDate)<0);
+  const followToday=open.filter(t=>daysUntil(t.followUpDate)!==null && daysUntil(t.followUpDate)<=0);
+  const doneToday=S.todos.filter(t=>t.done && t.doneAt===todayStr()).length;
+  const remOv=mindReminder(todayStr()); const owOv=ownWordsReminder(todayStr());
+  const savedNow=S.savedReminders.some(r=>r.text===remOv);
+
+  let html=`<div class="view-title">Übersicht</div>
+    <div class="view-sub">${WD[new Date().getDay()]}, ${new Date().toLocaleDateString("de-DE")} · ${open.length} offen · heute ${doneToday} erledigt ✓</div>
+
+    <div class="card" style="border-color:var(--accent-dim)">
+      <div class="row" style="justify-content:space-between; align-items:flex-start; gap:8px">
+        <div class="grow">
+          <div class="small" style="font-weight:600; margin-bottom:4px">✦ Erinnerung fürs Leben</div>
+          <div>${esc(remOv)}</div>
+        </div>
+        <button class="btn ghost" id="remSave" title="Erinnerung speichern" style="font-size:20px; padding:6px 8px; color:${savedNow?'var(--warn)':'var(--muted)'}">${savedNow?"★":"☆"}</button>
+      </div>
+      ${owOv?`<div class="tiny muted" style="margin-top:8px">Deine Worte (${fmtDate(owOv.date)}): „${esc(trimWords(owOv.a,18))}"</div>`:""}
+      ${S.savedReminders.length?`<button class="link" id="remToggle" style="margin-top:10px; display:inline-block">★ Gespeicherte (${S.savedReminders.length})</button>`:""}
+      ${S.ui.showSaved&&S.savedReminders.length?`<div style="margin-top:6px">${S.savedReminders.map((r,i)=>`
+        <div class="row" style="gap:8px; align-items:flex-start; padding:8px 0; border-top:1px solid var(--border)">
+          <div class="grow small">${esc(r.text)}<div class="tiny muted" style="margin-top:2px">${fmtDate(r.ts)}</div></div>
+          <button class="btn ghost sm" data-remdel="${i}" title="Entfernen">✕</button>
+        </div>`).join("")}</div>`:""}
+    </div>
+
+    <div class="card">
+      <h3>Schnell-Eingabe</h3>
+      <div class="field"><input id="qadd" placeholder="Was ist zu tun?" autocomplete="off"></div>
+      <div class="row">
+        <div class="grow"><label class="tiny muted" style="display:block; margin-bottom:4px">Frist (erledigt bis)</label>
+          <input type="date" id="qdue"></div>
+        <button class="btn" id="qaddBtn" style="align-self:flex-end">Hinzufügen</button>
+      </div>
+      <div class="tiny muted" style="margin-top:8px">Landet als wichtiges To-do im Eingang. Für mehr Details → Chat 💬</div>
+    </div>`;
+
+  if(followToday.length){
+    html+=`<div class="proj-head">🔔 Jetzt nachhaken</div>`;
+    html+=followToday.map(t=>todoCard(t,true)).join("");
+  }
+  if(overdue.length){
+    html+=`<div class="proj-head" style="color:var(--bad)">⚠ Überfällig</div>`;
+    html+=overdue.sort((a,b)=>urgency(b)-urgency(a)).map(t=>todoCard(t,true)).join("");
+  }
+  const byDue=(lo,hi)=>open.filter(t=>{const d=daysUntil(t.dueDate); return d!==null && d>=lo && d<=hi;}).sort((a,b)=>urgency(b)-urgency(a));
+  const dueGroups=[
+    {label:"Heute fällig", items:byDue(0,0)},
+    {label:"Morgen", items:byDue(1,1)},
+    {label:"In 2–4 Tagen", items:byDue(2,4)},
+    {label:"In 5–10 Tagen", items:byDue(5,10)},
+    {label:"In 11–30 Tagen", items:byDue(11,30)},
+  ];
+  if(dueGroups.some(g=>g.items.length)){
+    html+=`<div class="proj-head">🗓 Nach Frist</div>`;
+    dueGroups.forEach(g=>{ if(g.items.length){
+      html+=`<div class="tiny muted" style="margin:12px 0 6px; font-weight:700; letter-spacing:.3px">${g.label} · ${g.items.length}</div>`;
+      html+=g.items.map(t=>todoCard(t,true)).join("");
+    }});
+  }
+
+  html+=`<div class="proj-head">🎯 Am wichtigsten gerade</div>`;
+  html+= top.length ? top.map(t=>todoCard(t,true)).join("")
+                    : `<div class="empty">Keine offenen To-dos. Genieß den freien Kopf ✨</div>`;
+
+  const v=$("#view"); v.innerHTML=html; bindTodos(v);
+  const q=$("#qadd"), qb=$("#qaddBtn");
+  const doQ=()=>{ const val=q.value.trim(); if(!val) return;
+    const due=$("#qdue").value||null;
+    addTodo({title:val, priority:3, dueDate:due, areaId:ensureInbox().id});
+    q.value=""; toast("To-do angelegt"); render(); };
+  qb.onclick=doQ; q.onkeydown=e=>{ if(e.key==="Enter") doQ(); };
+  const rs=$("#remSave"); if(rs) rs.onclick=()=>{
+    if(S.savedReminders.some(r=>r.text===remOv)){ S.savedReminders=S.savedReminders.filter(r=>r.text!==remOv); toast("Entfernt"); }
+    else { S.savedReminders.unshift({text:remOv, ts:todayStr()}); toast("Erinnerung gespeichert ★"); }
+    save(); render();
+  };
+  const rt=$("#remToggle"); if(rt) rt.onclick=()=>{ S.ui.showSaved=!S.ui.showSaved; save(); render(); };
+  v.querySelectorAll("[data-remdel]").forEach(b=>b.onclick=()=>{ S.savedReminders.splice(+b.dataset.remdel,1); save(); render(); });
+}
+
+/* ============================ VIEW: AREA ============================ */
+function viewArea(id){
+  const a=areaById(id);
+  if(!a){ go("overview"); return; }
+  const mine=S.todos.filter(t=>t.areaId===id);
+  const openT=mine.filter(t=>!t.done), doneT=mine.filter(t=>t.done);
+
+  // group by project
+  const groups={}; const noProj=[];
+  openT.forEach(t=>{ if(t.project){ (groups[t.project]=groups[t.project]||[]).push(t);} else noProj.push(t); });
+  const projectNames=[...new Set(mine.filter(t=>t.project).map(t=>t.project))].sort();
+
+  let html=`<div class="row center" style="justify-content:space-between">
+      <div class="view-title">${esc(a.icon||"")} ${esc(a.name)}</div>
+      <div class="row">
+        <button class="btn ghost sm" id="areaEdit">✏️</button>
+        <button class="btn ghost sm" id="areaDel">🗑</button>
+      </div>
+    </div>
+    <div class="view-sub">${openT.length} offen · ${doneT.length} erledigt</div>
+
+    <div class="card">
+      <h3>Neues To-do</h3>
+      <div class="field"><input id="ntTitle" placeholder="Titel…" autocomplete="off"></div>
+      <div class="grid2">
+        <div class="field"><label>Wichtigkeit</label>
+          <select id="ntPrio"><option value="3">Hoch</option><option value="2" selected>Mittel</option><option value="1">Niedrig</option></select></div>
+        <div class="field"><label>Projekt (optional)</label>
+          <input id="ntProj" list="projListArea" placeholder="Projekt wählen oder neu">
+          <datalist id="projListArea">${projectNames.map(p=>`<option value="${esc(p)}">`).join("")}</datalist></div>
+        <div class="field"><label>Frist</label><input type="date" id="ntDue"></div>
+        <div class="field"><label>Nachhaken am</label><input type="date" id="ntFollow"></div>
+      </div>
+      <button class="btn" id="ntAdd" style="width:100%">To-do hinzufügen</button>
+    </div>`;
+
+  noProj.sort((x,y)=>urgency(y)-urgency(x));
+  if(noProj.length) html+=noProj.map(t=>todoCard(t,false)).join("");
+
+  Object.keys(groups).sort().forEach(pName=>{
+    html+=`<div class="proj-head"><span>📂 ${esc(pName)}</span>
+      <button class="link" data-splitproj="${esc(pName)}">↗ eigener Tab</button></div>`;
+    html+=groups[pName].sort((x,y)=>urgency(y)-urgency(x)).map(t=>todoCard(t,false)).join("");
+  });
+
+  if(projectNames.length){
+    html+=`<div class="card section-gap"><h3>Projekte in „${esc(a.name)}"</h3>`;
+    html+=projectNames.map(p=>{
+      const o=mine.filter(t=>t.project===p && !t.done).length;
+      const dn=mine.filter(t=>t.project===p && t.done).length;
+      return `<div class="rtile" style="margin-bottom:8px">
+        <span class="ic">📂</span>
+        <div class="grow"><b>${esc(p)}</b><div class="tiny muted">${o} offen · ${dn} erledigt</div></div>
+        <button class="link" data-splitproj="${esc(p)}">↗ eigener Tab</button>
+      </div>`;
+    }).join("");
+    html+=`</div>`;
+  }
+
+  if(!openT.length && !projectNames.length) html+=`<div class="empty">Noch keine To-dos in „${esc(a.name)}". Leg oben eins an.</div>`;
+
+  if(doneT.length){
+    html+=`<div class="proj-head">✓ Erledigt (${doneT.length})</div>`;
+    html+=doneT.slice(0,20).map(t=>todoCard(t,false)).join("");
+  }
+
+  const v=$("#view"); v.innerHTML=html;
+  // add todo
+  $("#ntAdd").onclick=()=>{
+    const title=$("#ntTitle").value.trim(); if(!title){ toast("Titel fehlt"); return; }
+    addTodo({title, priority:+$("#ntPrio").value, project:$("#ntProj").value.trim(),
+      dueDate:$("#ntDue").value||null, followUpDate:$("#ntFollow").value||null, areaId:id});
+    toast("Hinzugefügt"); render();
+  };
+  $("#ntTitle").onkeydown=e=>{ if(e.key==="Enter") $("#ntAdd").click(); };
+  $("#areaEdit").onclick=()=>editArea(a);
+  $("#areaDel").onclick=async ()=>{
+    const msg = mine.length ? `„${a.name}" enthält ${mine.length} To-dos. Wirklich löschen?` : `Bereich „${a.name}" löschen?`;
+    if(!await uiConfirm(msg,"Löschen")) return;
+    S.todos=S.todos.filter(t=>t.areaId!==id);
+    S.areas=S.areas.filter(x=>x.id!==id); go("overview"); toast("Bereich gelöscht");
+  };
+  v.querySelectorAll("[data-splitproj]").forEach(b=>b.onclick=()=>splitProject(id, b.dataset.splitproj));
+  bindTodos(v);
+}
+async function editArea(a){
+  const r=await uiPrompt("Bereich bearbeiten",[
+    {key:"name",label:"Name",value:a.name},
+    {key:"icon",label:"Emoji / Icon",value:a.icon||""}]);
+  if(!r) return;
+  a.name=r.name||a.name; a.icon=r.icon;
+  save(); render(); toast("Gespeichert");
+}
+async function splitProject(areaId, pName){
+  if(!await uiConfirm(`Projekt „${pName}" zu eigenem Tab machen?`,"Herauslösen")) return;
+  const colors=["#6c8cff","#46c98b","#f5a524","#b78cff","#f26d6d","#4dd0e1","#ff8fa3"];
+  const na={id:"a_"+uid(), name:pName, icon:"📌", color:colors[S.areas.length%colors.length]};
+  S.areas.push(na);
+  S.todos.forEach(t=>{ if(t.areaId===areaId && t.project===pName){ t.areaId=na.id; t.project=""; } });
+  go("area:"+na.id); toast("Als eigener Tab herausgelöst");
+}
+
+/* ============================ VIEW: ROUTINES ============================ */
+function dayScore(iso){
+  const log=S.routineLog[iso]; if(!log||!log.done) return 0;
+  const total=S.routines.length||1;
+  const done=Object.values(log.done).filter(Boolean).length;
+  return Math.round(done/total*100);
+}
+function viewRoutines(){
+  const today=todayStr();
+  const log=S.routineLog[today] || (S.routineLog[today]={done:{},focus:null});
+  if(!log.done) log.done={};
+  const todayDone=Object.values(log.done).filter(Boolean).length;
+  const todayScore=dayScore(today);
+
+  const d7=last(7), d14=last(14), d30=last(30);
+  const avg=arr=>arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length):0;
+  const s7=avg(d7.map(dayScore)), s30=avg(d30.map(dayScore));
+  // streak: consecutive days (up to today) with score>=60
+  let streak=0; for(let i=d30.length-1;i>=0;i--){ if(dayScore(d30[i])>=60) streak++; else break; }
+  const focus7=d7.map(x=>S.routineLog[x]&&S.routineLog[x].focus).filter(x=>x);
+  const focAvg=focus7.length?(focus7.reduce((a,b)=>a+b,0)/focus7.length).toFixed(1):"–";
+  const todosDone7=S.todos.filter(t=>t.done && t.doneAt && d7.includes(t.doneAt)).length;
+
+  let html=`<div class="view-title">Routinen</div>
+    <div class="view-sub">Deine privaten Ziele – dranbleiben zählt 🔥</div>
+
+    <div class="card">
+      <div class="row center" style="gap:16px">
+        <div class="ring" style="--p:${todayScore}"><div class="inner">
+          <div><span class="score-big">${todayScore}</span><span class="muted">%</span></div>
+        </div></div>
+        <div class="grow">
+          <div style="font-weight:700; font-size:17px; margin-bottom:2px">Heute</div>
+          <div class="muted small">${todayDone}/${S.routines.length} Routinen erledigt</div>
+          <div class="muted small">🔥 Streak: <b style="color:var(--good)">${streak}</b> Tag(e) ≥ 60%</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Heute abhaken</h3>
+      <div class="rgrid" id="rgrid">
+        ${S.routines.map(r=>`
+          <div class="rtile">
+            <span class="ic">${esc(r.icon||"•")}</span>
+            <div class="grow">${esc(r.name)}</div>
+            <div class="rbtns">
+              <button class="rtoggle no ${log.done[r.id]===false?"on":""}" data-rid="${r.id}" data-val="no" title="Nicht erledigt">✕</button>
+              <button class="rtoggle yes ${log.done[r.id]===true?"on":""}" data-rid="${r.id}" data-val="yes" title="Erledigt">✓</button>
+            </div>
+          </div>`).join("")}
+      </div>
+      <button class="btn sec sm" id="addRoutine" style="width:100%; margin-top:10px">＋ Routine hinzufügen</button>
+    </div>
+
+    <div class="card">
+      <h3>Fokus heute</h3>
+      <div class="muted small" style="margin-bottom:8px">Wie fokussiert hast du heute gearbeitet?</div>
+      <div class="foc" id="foc">
+        ${[1,2,3,4,5].map(n=>`<button data-foc="${n}" class="${log.focus===n?"on":""}">${n}</button>`).join("")}
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Score-Verlauf (14 Tage)</h3>
+      <div class="bars">
+        ${d14.map(x=>{const sc=dayScore(x); return `<div class="b" title="${x}: ${sc}%"><i style="height:${sc}%"></i></div>`;}).join("")}
+      </div>
+      <div class="row" style="margin-top:6px"><span class="tiny muted grow">vor 14 T.</span><span class="tiny muted">heute</span></div>
+    </div>
+
+    <div class="row" style="gap:10px">
+      <div class="stat"><b>${s7}%</b><span class="tiny muted">Ø 7 Tage</span></div>
+      <div class="stat"><b>${s30}%</b><span class="tiny muted">Ø 30 Tage</span></div>
+      <div class="stat"><b>${focAvg}</b><span class="tiny muted">Ø Fokus (7T)</span></div>
+      <div class="stat"><b>${todosDone7}</b><span class="tiny muted">To-dos ✓ (7T)</span></div>
+    </div>`;
+
+  html+=moodCardHTML(today);
+
+  const v=$("#view"); v.innerHTML=html;
+  bindMood(v, today);
+  v.querySelectorAll("[data-rid]").forEach(b=>b.onclick=()=>{
+    const rid=b.dataset.rid, val=b.dataset.val, cur=log.done[rid];
+    if(val==="yes") log.done[rid] = cur===true ? undefined : true;
+    else           log.done[rid] = cur===false ? undefined : false;
+    if(log.done[rid]===undefined) delete log.done[rid];
+    save(); render();
+  });
+  v.querySelectorAll("[data-foc]").forEach(b=>b.onclick=()=>{
+    const n=+b.dataset.foc; log.focus=(log.focus===n?null:n); save(); render();
+  });
+  $("#addRoutine").onclick=async ()=>{
+    const r=await uiPrompt("Neue Routine",[
+      {key:"name",label:"Name",placeholder:"z.B. Tagebuch schreiben"},
+      {key:"icon",label:"Emoji",value:"✅"}],"Anlegen");
+    if(!r||!r.name) return;
+    S.routines.push({id:"r_"+uid(), name:r.name, icon:r.icon||"✅"}); save(); render();
+  };
+}
+
+/* ============================ MIND: CONTENT BANKS ============================ */
+const QUOTES=[
+  {t:"Nicht weil es schwer ist, wagen wir es nicht, sondern weil wir es nicht wagen, ist es schwer.", a:"Seneca"},
+  {t:"Wer ein Warum zu leben hat, erträgt fast jedes Wie.", a:"Friedrich Nietzsche"},
+  {t:"Zwischen Reiz und Reaktion liegt ein Raum. In diesem Raum liegt unsere Macht, zu wählen.", a:"Viktor Frankl"},
+  {t:"Du hast Macht über deinen Geist – nicht über äußere Ereignisse. Erkenne das, und du findest Stärke.", a:"Marc Aurel"},
+  {t:"Es sind nicht die Dinge selbst, die uns beunruhigen, sondern unsere Vorstellungen von den Dingen.", a:"Epiktet"},
+  {t:"Wer andere kennt, ist klug. Wer sich selbst kennt, ist weise.", a:"Laotse"},
+  {t:"Deine Zeit ist begrenzt – verschwende sie nicht damit, das Leben eines anderen zu leben.", a:"Steve Jobs"},
+  {t:"In zwanzig Jahren wirst du mehr enttäuscht sein über das, was du nicht getan hast, als über das, was du getan hast.", a:"Mark Twain"},
+  {t:"Das Leben schrumpft oder weitet sich im Verhältnis zu unserem Mut.", a:"Anaïs Nin"},
+  {t:"Ein Leben ohne Selbstprüfung ist nicht lebenswert.", a:"Sokrates"},
+  {t:"Geh zuversichtlich in Richtung deiner Träume. Lebe das Leben, das du dir vorgestellt hast.", a:"Henry David Thoreau"},
+  {t:"Gestern war ich klug und wollte die Welt verändern. Heute bin ich weise und verändere mich selbst.", a:"Rumi"},
+  {t:"Das Leben kann nur rückwärts verstanden, aber es muss vorwärts gelebt werden.", a:"Søren Kierkegaard"},
+  {t:"Lebe, als würdest du morgen sterben. Lerne, als würdest du ewig leben.", a:"Mahatma Gandhi"},
+  {t:"Glück ist nichts Fertiges. Es entsteht aus deinen eigenen Handlungen.", a:"Dalai Lama"},
+  {t:"Man sieht nur mit dem Herzen gut. Das Wesentliche ist für die Augen unsichtbar.", a:"Antoine de Saint-Exupéry"},
+  {t:"Man muss das Leben nicht verstehen, dann wird es zu einem Fest.", a:"Rainer Maria Rilke"},
+  {t:"Das Leben ist wie Fahrradfahren. Um die Balance zu halten, musst du in Bewegung bleiben.", a:"Albert Einstein"},
+  {t:"Sei du selbst; alle anderen sind bereits vergeben.", a:"Oscar Wilde"},
+  {t:"Die Menschen vergessen, was du gesagt hast, aber nie, wie du sie fühlen ließest.", a:"Maya Angelou"},
+  {t:"Es ist nicht genug zu wissen – man muss auch anwenden. Es ist nicht genug zu wollen – man muss auch tun.", a:"Johann Wolfgang von Goethe"},
+  {t:"Wir sind, was wir wiederholt tun. Exzellenz ist daher keine Handlung, sondern eine Gewohnheit.", a:"Will Durant"},
+  {t:"Es ist nicht wichtig, wie langsam du gehst, solange du nicht stehen bleibst.", a:"Konfuzius"},
+  {t:"Die Zukunft gehört denen, die an die Schönheit ihrer Träume glauben.", a:"Eleanor Roosevelt"},
+  {t:"Solange du lebst, lerne zu leben.", a:"Seneca"},
+  {t:"Der Mensch leidet mehr in der Vorstellung als in der Wirklichkeit.", a:"Seneca"},
+  {t:"Wenn du das Ziel ändern willst, ändere zuerst deine Gewohnheiten.", a:"Aristoteles (zugeschrieben)"},
+  {t:"Freiheit bedeutet, dass man nicht unbedingt alles so machen muss wie andere Menschen.", a:"Astrid Lindgren"},
+];
+const MIND_Q=[
+  "Was ist dir gerade im Leben am wichtigsten – und lebst du danach?",
+  "Wofür bist du heute wirklich dankbar?",
+  "Wann hattest du zuletzt richtig Spaß? Wie holst du dir mehr davon?",
+  "Was würdest du tun, wenn Geld keine Rolle spielen würde?",
+  "Welche Sache hast du zu lange aufgeschoben, weil du Angst davor hast?",
+  "Wer tut dir gut? Wann siehst oder hörst du diese Person als Nächstes?",
+  "Was hast du diese Woche erlebt, das dich lebendig gefühlt hat?",
+  "Wenn heute dein letzter Tag wäre – würdest du ihn so verbringen?",
+  "Was tust du nur, um anderen zu gefallen? Darfst du es lassen?",
+  "Welches kleine Abenteuer könntest du diese Woche wagen?",
+  "Worauf bist du stolz, das du gern öfter feiern würdest?",
+  "Nimmst du dir genug Zeit nur für dich? Wann heute?",
+  "Was würde dein 80-jähriges Ich dir jetzt raten?",
+  "Welche Gewohnheit tut dir gut – welche zieht dich runter?",
+  "Was ist ein Traum, den du fast vergessen hast?",
+  "Wann hast du zuletzt etwas zum ersten Mal gemacht?",
+  "Was bedeutet ein gelungener Tag für dich – ganz konkret?",
+  "Welche Sorge von heute ist in einem Jahr bedeutungslos?",
+  "Wem könntest du heute eine Freude machen?",
+  "Was gibt dir Energie – was kostet dich welche?",
+  "Wovor läufst du gerade davon?",
+  "Was würdest du tun, wenn du wüsstest, dass du nicht scheitern kannst?",
+  "Wann fühlst du dich am freiesten? Wie bekommst du mehr davon?",
+  "Was hält dich davon ab, jetzt glücklich zu sein?",
+  "Welche Entscheidung schiebst du vor dir her – und was kostet dich das Warten?",
+  "Wenn du ein Jahr frei hättest, ohne Verpflichtungen: Was würdest du tun?",
+  "Was macht dich neidisch? Was sagt dir das über deine Wünsche?",
+  "Welchen Teil von dir versteckst du – und warum?",
+  "Was würdest du bereuen, wenn du es nie versuchst?",
+  "Wann hast du dich zuletzt richtig stolz gefühlt?",
+  "Welche Beziehung braucht gerade mehr Aufmerksamkeit von dir?",
+  "Was würde passieren, wenn du 'Nein' sagst zu dem, was dich auslaugt?",
+  "Was ist dir wichtiger: Sicherheit oder Freiheit? Warum?",
+  "Wann warst du zuletzt so vertieft, dass du die Zeit vergessen hast?",
+  "Welche Angst hat dich in den letzten Jahren am meisten eingeschränkt?",
+  "Was würdest du deinem jüngeren Ich heute sagen?",
+  "Welches 'Sollte' regiert dein Leben, obwohl es nicht deins ist?",
+  "Was ist genug? Wann hast du das Gefühl, es reicht?",
+  "Welche Sache lohnt es sich für dich zu leiden?",
+  "Wenn niemand es je erfahren würde – was würdest du trotzdem tun?",
+  "Was würdest du mehr tun, wenn du wüsstest, dass es dir Kraft gibt?",
+  "Wo bist du im Autopilot unterwegs – und wolltest eigentlich woanders hin?",
+  "Was ist ein mutiger Schritt, den du diese Woche gehen könntest?",
+  "Für wen oder was bist du bereit, unbequem zu sein?",
+  "Was würdest du tun, wenn du dich selbst weniger verurteilen würdest?",
+  "Welcher Ort lässt dich durchatmen? Wann warst du das letzte Mal dort?",
+  "Was hat dich als Kind begeistert – und wo ist das heute?",
+  "Welche Wahrheit über dich weichst du gerade aus?",
+  "Was macht dieses Jahr für dich zu einem guten Jahr?",
+  "Wann fühlst du dich ganz du selbst?",
+  "Was ist gerade dein größter innerer Widerstand – und wogegen?",
+  "Welche Erfahrung willst du unbedingt gemacht haben, bevor du älter bist?",
+  "Was würdest du loslassen, wenn du dich trauen würdest?",
+  "Wer inspiriert dich – und was genau bewunderst du an ihm?",
+  "Was tust du für andere, das dir selbst fehlt?",
+  "Wenn dein Leben ein Buch wäre – wie soll das nächste Kapitel heißen?",
+  "Welcher kleine Luxus würde deinen Alltag spürbar schöner machen?",
+  "Was fühlt sich gerade schwer an – und was davon ist wirklich deins zu tragen?",
+  "Worauf freust du dich? Und wenn nichts: Was könntest du planen?",
+  "Was würdest du ändern, wenn du wüsstest, dass niemand dich beurteilt?",
+];
+const MIND_R=[
+  "Stell den Spaß an die erste Stelle. Alles andere organisiert sich leichter drumherum. ✨",
+  "Nimm dir heute bewusst Zeit nur für dich – ohne schlechtes Gewissen. 🌿",
+  "Mach heute etwas Cooles. Das Leben besteht aus Momenten, nicht aus To-do-Haken. 🎈",
+  "Erlebe etwas Neues. Kleine Abenteuer machen das Leben groß. 🚀",
+  "Du musst nicht alles schaffen. Du darfst auch einfach leben. 💛",
+  "Ruf jemanden an, den du magst. Verbindung schlägt Produktivität. 📞",
+  "Sei stolz auf das, was du schon geschafft hast. Feier dich mal. 🥳",
+  "Atme durch. Nicht jeder Tag muss produktiv sein, um ein guter Tag zu sein. 🍃",
+  "Geh raus. Bewegung und frische Luft lösen mehr als jede To-do-Liste. 🌤️",
+  "Frag dich: Was würde heute leichter machen? Und dann tu genau das. 🪶",
+  "Gönn dir Ruhe, bevor du sie dringend brauchst. 🛀",
+  "Sag heute einmal Nein zu etwas, das dich auslaugt. 🚪",
+  "Plan etwas, worauf du dich freuen kannst. Vorfreude ist auch Freude. 🎟️",
+  "Du bist mehr als deine Leistung. Vergiss das heute nicht. 🌱",
+  "Mach eine Sache, die dich aus der Komfortzone holt. Nur eine. 🔥",
+  "Sei heute nachsichtig mit dir. Du machst das gut genug. 🤍",
+  "Genieß eine Kleinigkeit ganz bewusst – Kaffee, Sonne, ein Lied. ☕",
+  "Denk an dein 'Warum'. Es macht das 'Wie' leichter. 🎯",
+  "Weniger Bildschirm, mehr Leben. Nur für eine Stunde heute. 📵",
+  "Du darfst Dinge tun, nur weil sie dir Spaß machen. 🎨",
+];
+/* ============================ MIND: HELPERS ============================ */
+function dayNumber(){ const a=new Date(S.startDate+"T00:00:00"), b=new Date(todayStr()+"T00:00:00"); return Math.max(0, Math.round((b-a)/86400000)); }
+function trimWords(s,n){ const w=String(s||"").trim().split(/\s+/); return w.length<=n?w.join(" "):w.slice(0,n).join(" ")+"…"; }
+function collectValues(){
+  const out=[];
+  for(const date in S.valuesAns){ const qs=S.valuesDayQ[date]||[]; (S.valuesAns[date]||[]).forEach((a,i)=>{ if(a&&a.trim()) out.push({q:qs[i]||"", a:a.trim(), date}); }); }
+  return out;
+}
+const VALUES_Q=[
+  "Was sind die drei Werte, nach denen du leben willst?",
+  "Wann fühlst du dich frei? Was gehört für dich zu einem freien Leben?",
+  "Was bedeutet Ruhe und Gelassenheit für dich ganz konkret?",
+  "Bei welcher Tätigkeit vergisst du die Zeit?",
+  "Was willst du in fünf Jahren über dein Leben sagen können?",
+  "Welche Erfahrung willst du unbedingt noch machen?",
+  "Was gibt deinem Alltag Sinn?",
+  "Wovon willst du mehr in deinem Leben – wovon weniger?",
+  "Was ist dir wichtiger als Geld?",
+  "Wann warst du zuletzt richtig stolz auf dich – und warum?",
+  "Welche Art Mensch willst du für andere sein?",
+  "Was möchtest du in Bewegung bringen oder verändern – in dir oder der Welt?",
+  "Welche Menschen sollen eine große Rolle in deinem Leben spielen?",
+  "Was tust du am liebsten, wenn du ganz für dich bist?",
+  "Was bedeutet Erfolg für dich – jenseits von außen sichtbaren Dingen?",
+  "Welche Angst würdest du gern hinter dir lassen?",
+  "Was macht dich lebendig und neugierig?",
+  "Wo im Leben willst du mehr Mut zeigen?",
+  "Welche Gewohnheit würde dein Leben am meisten verbessern?",
+  "Was willst du dir öfter erlauben?",
+  "Wie soll sich ein normaler Dienstag in deinem Traumleben anfühlen?",
+  "Was würdest du tun, wenn du keine Angst vor dem Urteil anderer hättest?",
+  "Welches Ziel verfolgst du gerade wirklich aus eigenem Antrieb?",
+  "Was ist ein Ort, an dem du unbedingt gewesen sein willst?",
+  "Welche Grenze möchtest du dir und anderen gegenüber besser setzen?",
+  "Was würde dein Leben um 10 % leichter und schöner machen?",
+];
+function assignValuesDay(date){
+  if(S.valuesDayQ[date]) return S.valuesDayQ[date];
+  let pool=VALUES_Q.filter(x=>!S.valuesAsked.includes(x));
+  if(pool.length<2){ S.valuesAsked.length=0; pool=VALUES_Q.slice(); }
+  const two=[];
+  for(let i=0;i<2 && pool.length;i++){ const idx=Math.floor(Math.random()*pool.length); two.push(pool[idx]); S.valuesAsked.push(pool[idx]); pool.splice(idx,1); }
+  S.valuesDayQ[date]=two; save(); return two;
+}
+function mindQuestion(date){
+  if(S.mindDayQ[date]) return S.mindDayQ[date];
+  const vals=collectValues(); let q;
+  if(vals.length && Math.random()<0.34){
+    const src=vals[Math.floor(Math.random()*vals.length)];
+    q=`Du hast einmal notiert: „${trimWords(src.a,16)}" — lebst du das gerade wirklich? Was würde es stärker machen?`;
+  } else {
+    let pool=MIND_Q.filter(x=>!S.mindAskedQ.includes(x));
+    if(!pool.length){ S.mindAskedQ.length=0; pool=MIND_Q.slice(); }
+    q=pool[Math.floor(Math.random()*pool.length)]; S.mindAskedQ.push(q);
+  }
+  S.mindDayQ[date]=q; save(); return q;
+}
+function reminderBank(){
+  const mine=(S.myThoughts||[]).map(t=>t.source?`„${t.text}" — ${t.source}`:t.text);
+  return MIND_R.concat(mine);
+}
+function mindReminder(date){
+  if(S.mindDayR[date]) return S.mindDayR[date];
+  const bank=reminderBank();
+  let pool=bank.filter(x=>!S.mindAskedR.includes(x));
+  if(!pool.length){ S.mindAskedR.length=0; pool=bank.slice(); }
+  const p=pool[Math.floor(Math.random()*pool.length)]; S.mindDayR[date]=p; S.mindAskedR.push(p); save(); return p;
+}
+function mindQuote(date){
+  if(S.mindDayQuote[date]) return S.mindDayQuote[date];
+  let pool=QUOTES.filter(x=>!S.mindAskedQuote.includes(x.t));
+  if(!pool.length){ S.mindAskedQuote.length=0; pool=QUOTES.slice(); }
+  const p=pool[Math.floor(Math.random()*pool.length)]; S.mindDayQuote[date]=p; S.mindAskedQuote.push(p.t); save(); return p;
+}
+function ownWordsReminder(exceptDate){
+  const past=Object.keys(S.mindAnswers).filter(d=>d!==exceptDate && S.mindAnswers[d] && S.mindAnswers[d].a);
+  if(!past.length) return null;
+  const d=past[Math.floor(Math.random()*past.length)];
+  return {date:d, q:S.mindAnswers[d].q, a:S.mindAnswers[d].a};
+}
+
+/* ============================ MOOD (Gefühls-Check) ============================ */
+const MOOD_DIMS=[
+  {key:"overall",    label:"Wie geht es dir?",            pos:true},
+  {key:"freiheit",   label:"Wie frei fühlst du dich?",    pos:true},
+  {key:"ruhe",       label:"Wie ruhig & gelassen?",       pos:true},
+  {key:"stress",     label:"Wie gestresst? (10 = sehr)",  pos:false},
+  {key:"tatendrang", label:"Bock, etwas zu bewegen?",     pos:true},
+  {key:"neugier",    label:"Bock auf neue Erlebnisse?",   pos:true},
+];
+function moodWell(e){
+  if(!e) return null; const v=[];
+  MOOD_DIMS.forEach(d=>{ if(e[d.key]!=null) v.push(d.pos?e[d.key]:(11-e[d.key])); });
+  return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;
+}
+function moodStats(){
+  const days=Object.keys(S.mood); const distinct=new Set(); let sum=0,count=0;
+  days.forEach(d=>["morning","evening"].forEach(p=>{ const w=moodWell(S.mood[d]&&S.mood[d][p]); if(w!=null){ sum+=w; count++; distinct.add(d);} }));
+  const dimAvg={};
+  MOOD_DIMS.forEach(dim=>{ let s=0,n=0; days.forEach(d=>["morning","evening"].forEach(p=>{ const e=S.mood[d]&&S.mood[d][p]; if(e&&e[dim.key]!=null){ s+=dim.pos?e[dim.key]:(11-e[dim.key]); n++; } })); if(n) dimAvg[dim.key]=s/n; });
+  return {distinctDays:distinct.size, avg:count?sum/count:null, count, dimAvg};
+}
+function moodCardHTML(today){
+  const m=S.mood[today]||{};
+  const block=(period,title)=>{
+    const e=m[period]||{};
+    return `<div class="card"><h3>${title}</h3>`+
+      MOOD_DIMS.map(dim=>`
+        <div class="mfield">
+          <div class="row" style="justify-content:space-between; align-items:baseline">
+            <label class="tiny muted">${dim.label}</label>
+            <span class="tiny" style="font-variant-numeric:tabular-nums" data-mval="${period}.${dim.key}">${e[dim.key]!=null?e[dim.key]:"–"}</span>
+          </div>
+          <input type="range" min="1" max="10" value="${e[dim.key]!=null?e[dim.key]:5}" data-mood="${period}.${dim.key}">
+        </div>`).join("")+
+      `<div class="field" style="margin-top:6px"><textarea data-moodnote="${period}" placeholder="Wie geht es dir? (frei formulieren)">${esc(e.note||"")}</textarea></div></div>`;
+  };
+  let html=`<div class="proj-head">Gefühls-Check</div>`;
+  html+=block("morning","☀️ Morgens");
+  html+=block("evening","🌙 Abends");
+  const st=moodStats();
+  if(st.distinctDays>=4 && st.avg!=null){
+    const val=st.avg.toFixed(1); const low=st.avg<5.5;
+    let lowDim=null, lowV=99;
+    MOOD_DIMS.forEach(d=>{ if(st.dimAvg[d.key]!=null && st.dimAvg[d.key]<lowV){ lowV=st.dimAvg[d.key]; lowDim=d; } });
+    html+=`<div class="card" style="border-color:${low?'var(--bad)':'var(--good)'}">
+      <h3>Gefühls-Score</h3>
+      <div class="row center" style="gap:14px">
+        <div class="score-big" style="color:${low?'var(--bad)':'var(--good)'}">${val}<span class="muted" style="font-size:18px">/10</span></div>
+        <div class="grow small">${low
+          ? `Dein Schnitt der letzten Tage ist niedrig. Zeit, bewusst etwas zu ändern – mehr Freiheit, Ruhe oder ein neues Erlebnis.${lowDim?` Am schwächsten gerade: <b>${esc(lowDim.label.replace(" (10 = sehr)",""))}</b>.`:""}`
+          : `Läuft gut. Halte dir deine Freiräume, deine Ruhe und deinen Tatendrang bewusst.`}</div>
+      </div>
+      <div class="tiny muted" style="margin-top:8px">Ø aus ${st.count} Einträgen über ${st.distinctDays} Tage</div>
+    </div>`;
+  } else {
+    html+=`<div class="card"><h3>Gefühls-Score</h3><div class="muted small">Erscheint nach mindestens 4 Tagen mit Einträgen – noch ${Math.max(0,4-st.distinctDays)} Tag(e). Dann erinnert er dich, etwas zu ändern, wenn dein Schnitt niedrig ist.</div></div>`;
+  }
+  return html;
+}
+function bindMood(v, today){
+  const ensure=p=>{ S.mood[today]=S.mood[today]||{}; S.mood[today][p]=S.mood[today][p]||{}; return S.mood[today][p]; };
+  v.querySelectorAll("[data-mood]").forEach(inp=>{
+    inp.addEventListener("input",()=>{
+      const [p,k]=inp.dataset.mood.split("."); ensure(p)[k]=+inp.value;
+      const lbl=v.querySelector('[data-mval="'+p+'.'+k+'"]'); if(lbl) lbl.textContent=inp.value; save();
+    });
+    inp.addEventListener("change",()=>render());
+  });
+  v.querySelectorAll("[data-moodnote]").forEach(t=>{
+    t.addEventListener("change",()=>{ ensure(t.dataset.moodnote).note=t.value.trim(); save(); });
+  });
+}
+
+/* ============================ VIEW: MIND ============================ */
+function viewMind(){
+  const today=todayStr();
+  const quote=mindQuote(today);
+  const rem=mindReminder(today);
+  const q=mindQuestion(today);
+  const cur=S.mindAnswers[today]; const ans=cur?cur.a:"";
+  const dn=dayNumber();
+  const own=ownWordsReminder(today);
+
+  let html=`<div class="view-title">Mind · Leben</div>
+    <div class="view-sub">Kurz innehalten. Es geht ums Leben, nicht nur ums Erledigen.</div>
+
+    <div class="card" style="border-color:var(--accent-dim)">
+      <h3>Zitat des Tages</h3>
+      <div class="quote">„${esc(quote.t)}"</div>
+      <div class="qauthor">— ${esc(quote.a)}</div>
+    </div>
+
+    <div class="card">
+      <h3>Erinnerung für heute</h3>
+      <div class="quote" style="font-size:17px">${esc(rem)}</div>
+    </div>`;
+
+  html+=`<div class="card">
+      <h3>Eigene kluge Gedanken</h3>
+      <div class="muted small" style="margin-bottom:8px">Etwas Kluges gelesen oder gedacht (z.B. aus einem Buch)? Speichere es – es taucht als „Erinnerung fürs Leben" wieder auf.</div>
+      <div class="field"><textarea id="mtText" placeholder="Der Gedanke / das Zitat…"></textarea></div>
+      <div class="row"><input id="mtSrc" class="grow" placeholder="Quelle / Autor (optional)"><button class="btn" id="mtAdd">Speichern</button></div>
+      ${S.myThoughts.length?`<div style="margin-top:10px">${S.myThoughts.slice(0,8).map(t=>`
+        <div class="row" style="gap:8px; align-items:flex-start; padding:8px 0; border-top:1px solid var(--border)">
+          <div class="grow small">„${esc(t.text)}"${t.source?`<div class="tiny muted" style="margin-top:2px">— ${esc(t.source)}</div>`:""}</div>
+          <button class="btn ghost sm" data-mtdel="${t.id}">✕</button>
+        </div>`).join("")}</div>`:""}
+    </div>`;
+
+  if(dn<10){
+    const two=assignValuesDay(today); const saved=S.valuesAns[today]||[];
+    html+=`<div class="card" style="border-color:var(--purple)">
+      <h3>Werte &amp; Ziele · Tag ${dn+1}/10</h3>
+      <div class="muted small" style="margin-bottom:10px">In den ersten 10 Tagen lernt dich das Tool kennen. Deine Antworten formen später deine Fragen des Tages.</div>
+      ${two.map((qq,i)=>`<div class="field"><label>${esc(qq)}</label><textarea data-vidx="${i}" placeholder="…">${esc(saved[i]||"")}</textarea></div>`).join("")}
+      <button class="btn" id="valSave" style="width:100%">Speichern</button>
+    </div>`;
+  }
+
+  html+=`<div class="card">
+      <h3>Frage des Tages</h3>
+      <div class="quote" style="margin-bottom:12px">${esc(q)}</div>
+      <textarea id="mindA" placeholder="Deine Gedanken…" style="min-height:100px">${esc(ans)}</textarea>
+      <button class="btn" id="mindSave" style="width:100%; margin-top:10px">Speichern</button>
+    </div>`;
+
+  if(own){
+    html+=`<div class="card" style="border-color:var(--accent-dim)">
+      <h3>Erinnerung an deine eigenen Worte</h3>
+      <div class="tiny muted">${fmtDate(own.date)}${own.q?` · auf „${esc(trimWords(own.q,12))}"`:""}</div>
+      <div style="margin-top:6px">„${esc(own.a)}"</div>
+    </div>`;
+  }
+
+  const past=Object.keys(S.mindAnswers).filter(d=>d!==today && S.mindAnswers[d]&&S.mindAnswers[d].a).sort().reverse().slice(0,7);
+  if(past.length){
+    html+=`<div class="proj-head">Frühere Gedanken</div>`;
+    past.forEach(d=>{ const e=S.mindAnswers[d]; html+=`<div class="card"><div class="tiny muted">${fmtDate(d)}${e.q?` · „${esc(trimWords(e.q,10))}"`:""}</div><div>${esc(e.a)}</div></div>`; });
+  }
+
+  const v=$("#view"); v.innerHTML=html;
+  $("#mindSave").onclick=()=>{ S.mindAnswers[today]={q, a:$("#mindA").value.trim()}; save(); toast("Gespeichert 🌿"); render(); };
+  const vs=$("#valSave");
+  if(vs) vs.onclick=()=>{ const arr=[]; v.querySelectorAll("[data-vidx]").forEach(t=>arr[+t.dataset.vidx]=t.value.trim()); S.valuesAns[today]=arr; save(); toast("Werte gespeichert 💜"); render(); };
+  const mtAdd=$("#mtAdd"); if(mtAdd) mtAdd.onclick=()=>{
+    const tx=$("#mtText").value.trim(); if(!tx){ toast("Gedanke fehlt"); return; }
+    S.myThoughts.unshift({id:uid(), text:tx, source:$("#mtSrc").value.trim(), ts:todayStr()}); save(); render(); toast("Gedanke gespeichert 💡");
+  };
+  v.querySelectorAll("[data-mtdel]").forEach(b=>b.onclick=()=>{ S.myThoughts=S.myThoughts.filter(x=>x.id!==b.dataset.mtdel); save(); render(); });
+}
+
+/* ============================ VIEW: IDEAS ============================ */
+function viewIdeas(){
+  const topics=[...new Set(S.ideas.map(i=>i.topic||"Allgemein"))].sort();
+  let html=`<div class="view-title">Ideen</div>
+    <div class="view-sub">Was irgendwann cool wäre – jetzt geparkt, nicht vergessen.</div>
+    <div class="card">
+      <h3>Neue Idee</h3>
+      <div class="field"><input id="idTitle" placeholder="Die Idee…"></div>
+      <div class="grid2">
+        <div class="field"><input id="idTopic" placeholder="Themenbereich (z.B. Reisen)" list="topicList">
+          <datalist id="topicList">${topics.map(t=>`<option value="${esc(t)}">`).join("")}</datalist></div>
+        <div class="field"><button class="btn" id="idAdd" style="width:100%">Hinzufügen</button></div>
+      </div>
+    </div>`;
+
+  if(!S.ideas.length){ html+=`<div class="empty">Noch keine Ideen. Der Kopf ist voll davon – schreib eine auf 💡</div>`; }
+  topics.forEach(tp=>{
+    html+=`<div class="proj-head">💡 ${esc(tp)}</div>`;
+    S.ideas.filter(i=>(i.topic||"Allgemein")===tp).forEach(i=>{
+      html+=`<div class="card" data-idea="${i.id}">
+        <div class="row" style="justify-content:space-between; gap:8px">
+          <div class="grow"><b>${esc(i.title)}</b>${i.notes?`<div class="small muted" style="margin-top:4px">${esc(i.notes)}</div>`:""}</div>
+          <div class="row">
+            <button class="btn ghost sm" data-idact="topromote" title="Zu To-do machen">➜ To-do</button>
+            <button class="btn ghost sm" data-idact="del">✕</button>
+          </div>
+        </div></div>`;
+    });
+  });
+
+  const v=$("#view"); v.innerHTML=html;
+  $("#idAdd").onclick=()=>{
+    const title=$("#idTitle").value.trim(); if(!title){ toast("Titel fehlt"); return; }
+    S.ideas.unshift({id:uid(), title, topic:$("#idTopic").value.trim()||"Allgemein", notes:"", ts:todayStr()});
+    save(); render(); toast("Idee gespeichert");
+  };
+  v.querySelectorAll("[data-idea]").forEach(card=>{
+    const id=card.dataset.idea;
+    card.querySelectorAll("[data-idact]").forEach(b=>b.onclick=()=>{
+      if(b.dataset.idact==="del"){ S.ideas=S.ideas.filter(x=>x.id!==id); save(); render(); }
+      if(b.dataset.idact==="topromote"){
+        const i=S.ideas.find(x=>x.id===id);
+        addTodo({title:i.title, notes:i.notes, priority:2, areaId:ensureInbox().id});
+        toast("Als To-do im Eingang angelegt"); go("area:"+ensureInbox().id);
+      }
+    });
+  });
+}
+
+/* ============================ VIEW: WISHES (Lebenswünsche) ============================ */
+const WISH_CATS=[
+  {k:"Reise", icon:"🌍"}, {k:"Challenge", icon:"🔥"}, {k:"Erlebnis", icon:"✨"}, {k:"Sonstiges", icon:"📝"}
+];
+const WISH_POOL=[
+  {c:"Reise", t:"Nordlichter in Norwegen sehen"},
+  {c:"Reise", t:"Roadtrip an der Westküste der USA"},
+  {c:"Reise", t:"Eine Woche allein durch Japan reisen"},
+  {c:"Reise", t:"Safari in Tansania"},
+  {c:"Reise", t:"Mit dem Zug durch die Alpen"},
+  {c:"Reise", t:"Backpacking durch Südostasien"},
+  {c:"Reise", t:"Silvester in einer neuen Stadt feiern"},
+  {c:"Reise", t:"Patagonien erwandern"},
+  {c:"Challenge", t:"Einen Halbmarathon laufen"},
+  {c:"Challenge", t:"30 Tage kalt duschen"},
+  {c:"Challenge", t:"Einen Monat komplett zuckerfrei"},
+  {c:"Challenge", t:"Fallschirmsprung wagen"},
+  {c:"Challenge", t:"Ein Instrument von Grund auf lernen"},
+  {c:"Challenge", t:"Eine Woche digital detox"},
+  {c:"Challenge", t:"Einen Sonnenaufgang auf einem Berg erleben"},
+  {c:"Challenge", t:"Öffentlich eine Rede halten"},
+  {c:"Erlebnis", t:"Heißluftballon-Fahrt"},
+  {c:"Erlebnis", t:"Konzert deiner Lieblingsband live"},
+  {c:"Erlebnis", t:"Tauchen lernen und ein Riff sehen"},
+  {c:"Erlebnis", t:"Einen fremden Menschen zum Essen einladen"},
+  {c:"Erlebnis", t:"Eine Nacht unter freiem Himmel schlafen"},
+  {c:"Erlebnis", t:"Selbst Pasta / Brot von Grund auf machen"},
+  {c:"Erlebnis", t:"Surfen lernen"},
+  {c:"Erlebnis", t:"Einen Tag lang das Handy zuhause lassen"},
+];
+function viewWishes(){
+  const cat=S.ui.wishCat||"alle";
+  let list=S.wishes;
+  if(cat!=="alle") list=list.filter(w=>w.cat===cat);
+
+  let html=`<div class="view-title">Lebenswünsche</div>
+    <div class="view-sub">Reiseziele, verrückte Challenges, Dinge, die du erleben willst.</div>
+
+    <div class="card">
+      <h3>Neuer Lebenswunsch</h3>
+      <div class="field"><input id="wTitle" placeholder="Was willst du erleben?"></div>
+      <div class="field"><label>Kategorie</label>
+        <select id="wCat">${WISH_CATS.map(c=>`<option value="${c.k}">${c.icon} ${c.k}</option>`).join("")}</select></div>
+      <div class="row">
+        <button class="btn grow" id="wAdd">Hinzufügen</button>
+        <button class="btn sec" id="wSuggest">💡 Schlag mir was vor</button>
+      </div>
+      <div id="suggestBox"></div>
+    </div>
+
+    <div class="catrow">
+      <button class="catchip ${cat==="alle"?"on":""}" data-cat="alle">Alle</button>
+      ${WISH_CATS.map(c=>`<button class="catchip ${cat===c.k?"on":""}" data-cat="${c.k}">${c.icon} ${c.k}</button>`).join("")}
+    </div>`;
+
+  if(!list.length){ html+=`<div class="empty">Noch keine Wünsche in dieser Kategorie. Lass dir was vorschlagen 💡</div>`; }
+  list.forEach(w=>{
+    const c=WISH_CATS.find(x=>x.k===w.cat)||{icon:"📝"};
+    html+=`<div class="card ${w.done?"":""}" data-wish="${w.id}">
+      <div class="row center" style="gap:10px">
+        <button class="check ${w.done?"on":""}" data-wact="toggle">${w.done?"✓":""}</button>
+        <div class="grow"><b style="${w.done?"text-decoration:line-through;opacity:.6":""}">${c.icon} ${esc(w.title)}</b>
+          ${w.notes?`<div class="small muted">${esc(w.notes)}</div>`:""}</div>
+        <button class="btn ghost sm" data-wact="del">✕</button>
+      </div></div>`;
+  });
+
+  const v=$("#view"); v.innerHTML=html;
+  $("#wAdd").onclick=()=>{
+    const t=$("#wTitle").value.trim(); if(!t){ toast("Titel fehlt"); return; }
+    S.wishes.unshift({id:uid(), title:t, cat:$("#wCat").value, notes:"", done:false, ts:todayStr()});
+    save(); render(); toast("Wunsch gespeichert ⭐");
+  };
+  $("#wSuggest").onclick=()=>suggestWish();
+  v.querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>{ S.ui.wishCat=b.dataset.cat; save(); render(); });
+  v.querySelectorAll("[data-wish]").forEach(card=>{
+    const id=card.dataset.wish;
+    card.querySelectorAll("[data-wact]").forEach(b=>b.onclick=()=>{
+      const w=S.wishes.find(x=>x.id===id);
+      if(b.dataset.wact==="toggle"){ w.done=!w.done; save(); render(); if(w.done) toast("Erlebt! 🎉"); }
+      if(b.dataset.wact==="del"){ S.wishes=S.wishes.filter(x=>x.id!==id); save(); render(); }
+    });
+  });
+}
+function suggestWish(){
+  const have=new Set(S.wishes.map(w=>w.title.toLowerCase()));
+  const pool=WISH_POOL.filter(p=>!have.has(p.t.toLowerCase()) && !S.suggested.includes(p.t));
+  const src=pool.length?pool:WISH_POOL.filter(p=>!have.has(p.t.toLowerCase()));
+  if(!src.length){ toast("Du hast schon alle Vorschläge 😊"); return; }
+  const pick=src[Math.floor(Math.random()*src.length)];
+  S.suggested.push(pick.t); save();
+  const c=WISH_CATS.find(x=>x.k===pick.c)||{icon:"📝"};
+  const box=$("#suggestBox");
+  box.innerHTML=`<div class="card" style="margin-top:12px; border-color:var(--accent-dim)">
+    <div class="small muted">Vorschlag</div>
+    <div style="font-weight:700; margin:4px 0 10px">${c.icon} ${esc(pick.t)}</div>
+    <div class="row">
+      <button class="btn grow" id="sgYes">✓ Übernehmen</button>
+      <button class="btn sec" id="sgNo">Anderer Vorschlag</button>
+    </div></div>`;
+  $("#sgYes").onclick=()=>{ S.wishes.unshift({id:uid(), title:pick.t, cat:pick.c, notes:"", done:false, ts:todayStr()}); save(); render(); toast("Zu deinen Lebenswünschen hinzugefügt ⭐"); };
+  $("#sgNo").onclick=()=>suggestWish();
+}
+
+/* ============================ CHAT ============================ */
+function renderChat(){
+  const log=$("#chatlog");
+  if(!S.chat.length){
+    log.innerHTML=`<div class="bub bot">Hi! 👋 Gib mir ein To-do mit Frist, Wichtigkeit und Bereich – ich sortiere es ein.
+\nBeispiele:
+• „Angebot schreiben bis Freitag wichtig Arbeit"
+• „Zahnarzt anrufen morgen Privat"
+• „Präsentation bis 12.09. nachhaken in 3 Tagen"</div>`;
+  } else {
+    log.innerHTML=S.chat.map(m=>`<div class="bub ${m.role}">${esc(m.text)}</div>`).join("");
+  }
+  log.scrollTop=log.scrollHeight;
+}
+function chatProcess(text){
+  text=(text||"").trim(); if(!text) return null;
+  S.chat.push({role:"me", text, ts:Date.now()});
+  const p=parseTodo(text);
+  const t=addTodo({title:p.title, priority:p.priority, dueDate:p.dueDate, followUpDate:p.followUpDate, areaId:p.areaId});
+  const a=areaById(t.areaId);
+  let reply=`✓ Angelegt: „${p.title}"\n`;
+  reply+=`• Bereich: ${a?a.name:"Eingang"}\n`;
+  reply+=`• Wichtigkeit: ${["","niedrig","mittel","hoch"][p.priority]}\n`;
+  reply+=`• Frist: ${p.dueDate?fmtDate(p.dueDate):"—"}\n`;
+  if(p.followUpDate) reply+=`• Nachhaken: ${fmtDate(p.followUpDate)}\n`;
+  reply+=`Tipp: Details & Milestones kannst du im jeweiligen Tab anpassen.`;
+  S.chat.push({role:"bot", text:reply, ts:Date.now()});
+  save(); return t;
+}
+function chatSend(){
+  const inp=$("#chatInput"); const text=inp.value.trim(); if(!text) return;
+  inp.value=""; chatProcess(text); renderChat();
+  if(S.ui.active==="overview"||S.ui.active==="chat"||S.ui.active.startsWith("area:")) render();
+}
+
+/* ---- Spracheingabe (Web Speech API) ---- */
+function speechSupported(){ return !!(window.SpeechRecognition||window.webkitSpeechRecognition); }
+let _rec=null;
+function startDictation(targetInput, micBtn){
+  if(!speechSupported()){ toast("Spracheingabe wird auf diesem Gerät nicht unterstützt"); return; }
+  if(_rec){ try{_rec.stop();}catch(e){} return; }
+  const R=window.SpeechRecognition||window.webkitSpeechRecognition;
+  _rec=new R(); _rec.lang="de-DE"; _rec.interimResults=true; _rec.continuous=false;
+  if(micBtn) micBtn.classList.add("rec");
+  const base=targetInput.value?targetInput.value+" ":"";
+  _rec.onresult=e=>{ let s=""; for(let i=e.resultIndex;i<e.results.length;i++) s+=e.results[i][0].transcript; targetInput.value=base+s; };
+  _rec.onerror=()=>{ if(micBtn) micBtn.classList.remove("rec"); };
+  _rec.onend=()=>{ if(micBtn) micBtn.classList.remove("rec"); _rec=null; };
+  try{ _rec.start(); }catch(e){ if(micBtn) micBtn.classList.remove("rec"); _rec=null; }
+}
+
+/* ---- Chat-Tab (WhatsApp-Look) ---- */
+function chatBubbles(){
+  if(!S.chat.length) return `<div class="wa-bubble bot">Hi! 👋 Schreib oder sprich mir ein To-do – mit Frist, Wichtigkeit und Bereich.
+Beispiele:
+• „Angebot schreiben bis Freitag wichtig Arbeit"
+• „Zahnarzt anrufen morgen Privat"
+• „Präsentation bis 12.09. nachhaken in 3 Tagen"</div>`;
+  return S.chat.map(m=>`<div class="wa-bubble ${m.role==="me"?"me":"bot"}">${esc(m.text)}</div>`).join("");
+}
+function viewChat(){
+  let html=`<div class="wa">
+    <div class="wa-head"><b>Chat</b> <span class="tiny muted">To-dos per Text oder 🎤 Sprache erfassen</span></div>
+    <div class="wa-log" id="waLog">${chatBubbles()}</div>
+    <div class="wa-input">
+      ${speechSupported()?`<button class="wa-mic" id="waMic" title="Spracheingabe">🎤</button>`:""}
+      <input id="waInput" class="grow" placeholder="Nachricht… z.B. Angebot bis Freitag wichtig Arbeit" autocomplete="off">
+      <button class="wa-send" id="waSend">➤</button>
+    </div>
+  </div>`;
+  const v=$("#view"); v.innerHTML=html;
+  const inp=$("#waInput");
+  const send=()=>{ const t=inp.value.trim(); if(!t) return; inp.value=""; chatProcess(t); render(); };
+  $("#waSend").onclick=send;
+  inp.onkeydown=e=>{ if(e.key==="Enter") send(); };
+  const mic=$("#waMic"); if(mic) mic.onclick=()=>startDictation(inp, mic);
+  const l=$("#waLog"); if(l){ l.scrollTop=l.scrollHeight; setTimeout(()=>{ l.scrollTop=l.scrollHeight; },30); }
+}
+
+/* ============================ VIEW: ZIELE ============================ */
+const GOAL_STOP=new Set("und oder der die das den dem ein eine einen einem eines mit für bei aus von zu vom zur zum bis auf über unter nach vor noch mal bitte neue neuer neues neu mehr etwas dann wenn also aber nur schon als auch dass dazu ist sind war ich du er sie es wir ihr mein meine dein deine machen tun holen kaufen schreiben rufen anrufen termin heute morgen".split(/\s+/));
+function gTokens(str){ return (str||"").toLowerCase().replace(/[^a-zäöüß0-9\s]/g," ").split(/\s+/).filter(w=>w.length>=4 && !GOAL_STOP.has(w)); }
+function goalKeywords(g){ return [...new Set(gTokens(g.title).concat((g.keywords||[]).map(k=>k.toLowerCase())))]; }
+function goalLinkedTodos(g){ const kws=goalKeywords(g); if(!kws.length) return []; return S.todos.filter(t=>{ const txt=((t.title||"")+" "+(t.project||"")+" "+(t.notes||"")).toLowerCase(); return kws.some(k=>txt.includes(k)); }); }
+function goalProgress(g){ const linked=goalLinkedTodos(g); const done=linked.filter(t=>t.done).length; return {linked, done, total:linked.length, pct:linked.length?Math.round(done/linked.length*100):0}; }
+function goalSuggestions(){
+  const freq={};
+  S.todos.forEach(t=>{ [...new Set(gTokens(t.title).concat(gTokens(t.project)))].forEach(w=>{ freq[w]=(freq[w]||0)+1; }); });
+  const existing=new Set(); S.goals.forEach(g=>goalKeywords(g).forEach(k=>existing.add(k)));
+  return Object.entries(freq).filter(([w,c])=>c>=3 && !existing.has(w) && !(S.dismissedGoalSug||[]).includes(w))
+    .sort((a,b)=>b[1]-a[1]).slice(0,6).map(([w,c])=>({word:w,count:c}));
+}
+function goalCheckDue(g){ if(!g.checks||!g.checks.length) return true; return daysUntil(g.checks[g.checks.length-1].date)<=-7; }
+const GOAL_Q=[
+  "Was ist der nächste konkrete Schritt für dieses Ziel?",
+  "Was hat dich zuletzt vorangebracht – was hält dich auf?",
+  "Woran merkst du, dass du diesem Ziel näher kommst?",
+  "Was könntest du diese Woche konkret dafür tun?",
+  "Ist dieses Ziel noch wichtig für dich – oder darf es sich verändern?",
+];
+function viewGoals(){
+  const cats=[{k:"privat",label:"Privat",icon:"🏡"},{k:"beruflich",label:"Beruflich",icon:"💼"}];
+  let html=`<div class="view-title">Ziele</div>
+    <div class="view-sub">Ziehen sich automatisch aus deinen To-dos – Fortschritt = erledigte verknüpfte To-dos. Kein manuelles Zuordnen nötig.</div>
+    <div class="card">
+      <h3>Neues Ziel</h3>
+      <div class="field"><input id="goTitle" placeholder="z.B. Website relaunchen / Fitter werden"></div>
+      <div class="field"><label>Bereich</label><select id="goCat"><option value="beruflich">💼 Beruflich</option><option value="privat">🏡 Privat</option></select></div>
+      <button class="btn" id="goAdd" style="width:100%">Ziel anlegen</button>
+      <div class="tiny muted" style="margin-top:8px">Tipp: Wähl einen Titel mit einem Stichwort, das auch in passenden To-dos vorkommt (z.B. „Website"). Weitere Stichwörter kannst du je Ziel ergänzen.</div>
+    </div>`;
+
+  const sugs=goalSuggestions();
+  if(sugs.length){
+    html+=`<div class="card"><h3>Mögliche Ziele aus deinen To-dos</h3>
+      <div class="muted small" style="margin-bottom:8px">Häufige Themen in deinen To-dos – tippen legt ein Ziel dafür an.</div>
+      <div>${sugs.map(s=>`<button class="gsug" data-gsug="${esc(s.word)}">🎯 ${esc(s.word)} · ${s.count}</button>`).join("")}</div>
+    </div>`;
+  }
+
+  cats.forEach(c=>{
+    const gs=S.goals.filter(g=>g.cat===c.k);
+    html+=`<div class="proj-head">${c.icon} ${c.label}</div>`;
+    if(!gs.length) html+=`<div class="empty">Noch keine ${c.label.toLowerCase()}en Ziele.</div>`;
+    gs.forEach(g=>{
+      const pr=goalProgress(g);
+      const openLinked=pr.linked.filter(t=>!t.done).sort((a,b)=>urgency(b)-urgency(a)).slice(0,4);
+      const due=goalCheckDue(g);
+      const lastCheck=g.checks&&g.checks.length?g.checks[g.checks.length-1]:null;
+      const qq=GOAL_Q[((g.checks&&g.checks.length)||0)%GOAL_Q.length];
+      html+=`<div class="card" data-goal="${g.id}">
+        <div class="row" style="justify-content:space-between; gap:6px">
+          <div class="grow"><b>${esc(g.title)}</b></div>
+          <button class="btn ghost sm" data-goedit>✏️</button>
+          <button class="btn ghost sm" data-godel>🗑</button>
+        </div>
+        <div class="gbar"><i style="width:${pr.pct}%"></i></div>
+        <div class="tiny muted">${pr.done}/${pr.total} verknüpfte To-dos erledigt · ${pr.pct}%${pr.total?"":" – noch keine passenden To-dos gefunden"}</div>
+        ${openLinked.length?`<div style="margin-top:8px"><div class="tiny muted" style="font-weight:700; margin-bottom:4px">Nächste Schritte (aus deinen To-dos)</div>${openLinked.map(t=>{const a=areaById(t.areaId);return `<div class="small" style="padding:3px 0">• ${esc(t.title)}${a?` <span class="tiny muted">(${esc(a.name)})</span>`:""}</div>`;}).join("")}</div>`:""}
+        <div class="card" style="margin-top:10px; background:var(--panel2)">
+          <div class="tiny muted">${due?"🟠 Zeit für einen Fortschritts-Check":"Fortschritts-Check"}</div>
+          <div style="font-weight:600; margin:4px 0 8px">${esc(qq)}</div>
+          <textarea data-gnote placeholder="Kurz festhalten…"></textarea>
+          <div class="tiny muted" style="margin:8px 0 4px">Wie gut läuft es? (1–10)</div>
+          <div class="foc" data-grating>${[2,4,6,8,10].map(n=>`<button data-gr="${n}">${n}</button>`).join("")}</div>
+          <button class="btn sm" data-gcheck style="width:100%; margin-top:8px">Check speichern</button>
+          ${lastCheck?`<div class="tiny muted" style="margin-top:8px">Zuletzt ${fmtDate(lastCheck.date)}${lastCheck.rating?` · ${lastCheck.rating}/10`:""}${lastCheck.note?` · „${esc(trimWords(lastCheck.note,14))}"`:""}</div>`:""}
+        </div>
+      </div>`;
+    });
+  });
+
+  const v=$("#view"); v.innerHTML=html;
+  $("#goAdd").onclick=()=>{ const t=$("#goTitle").value.trim(); if(!t){toast("Titel fehlt");return;} S.goals.unshift({id:"g_"+uid(), title:t, cat:$("#goCat").value, keywords:[], checks:[], created:todayStr()}); save(); render(); toast("Ziel angelegt 🎯"); };
+  v.querySelectorAll("[data-gsug]").forEach(b=>b.onclick=()=>{ const w=b.dataset.gsug; S.goals.unshift({id:"g_"+uid(), title:w.charAt(0).toUpperCase()+w.slice(1), cat:"beruflich", keywords:[w], checks:[], created:todayStr()}); save(); render(); toast("Ziel aus Vorschlag angelegt"); });
+  v.querySelectorAll("[data-goal]").forEach(card=>{
+    const id=card.dataset.goal; const g=S.goals.find(x=>x.id===id); if(!g) return; let rating=null;
+    card.querySelector("[data-godel]").onclick=async ()=>{ if(await uiConfirm("Ziel löschen?","Löschen")){ S.goals=S.goals.filter(x=>x.id!==id); save(); render(); } };
+    card.querySelector("[data-goedit]").onclick=async ()=>{ const r=await uiPrompt("Ziel bearbeiten",[{key:"title",label:"Titel",value:g.title},{key:"keywords",label:"Extra-Stichwörter (Komma)",value:(g.keywords||[]).join(", ")}]); if(!r) return; g.title=r.title||g.title; g.keywords=(r.keywords||"").split(",").map(s=>s.trim().toLowerCase()).filter(Boolean); save(); render(); toast("Gespeichert"); };
+    card.querySelectorAll("[data-gr]").forEach(b=>b.onclick=()=>{ rating=+b.dataset.gr; card.querySelectorAll("[data-gr]").forEach(x=>x.classList.remove("on")); b.classList.add("on"); });
+    card.querySelector("[data-gcheck]").onclick=()=>{ const note=card.querySelector("[data-gnote]").value.trim(); if(!note && !rating){ toast("Nichts einzutragen"); return; } g.checks=g.checks||[]; g.checks.push({date:todayStr(), rating, note}); save(); render(); toast("Check gespeichert ✓"); };
+  });
+}
+
+/* ============================ VIEW: LESEZEICHEN ============================ */
+const BM_TOPICS=[
+  {cat:"Reisen", kw:["reise","travel","urlaub","hotel","strand","city","trip","flug","backpack","wander","berg","insel","roadtrip"]},
+  {cat:"Fitness & Gesundheit", kw:["fitness","workout","gym","training","health","gesund","ernähr","abnehm","muskel","yoga","lauf","protein","schlaf","mobility"]},
+  {cat:"Business & Karriere", kw:["business","startup","marketing","sales","vertrieb","karriere","produktiv","unternehm","gründ","strategie","leadership","umsatz","kunde"]},
+  {cat:"Essen & Rezepte", kw:["rezept","recipe","kochen","food","essen","backen","meal","küche","gericht","pasta","vegan"]},
+  {cat:"Mindset & Motivation", kw:["motivation","mindset","selbst","persönlich","achtsam","meditat","glück","gewohnheit","disziplin","stoic","stoiz","fokus"]},
+  {cat:"Technik & Tools", kw:["tech","software","app","tool","code","program","gadget","automat","notion","ki-","ai ","chatgpt"]},
+  {cat:"Finanzen", kw:["finanz","invest","aktie","etf","geld","sparen","krypto","vermögen","steuer","passiv"]},
+  {cat:"Design & Inspiration", kw:["design","inspir","kunst","architekt","interior","ästhet","foto","brand","typo","farbe"]},
+  {cat:"Lernen & Wissen", kw:["lernen","tutorial","kurs","wissen","buch","podcast","doku","sprache","study","how to","howto"]},
+];
+const BM_EXTRA_CATS=["Social & Videos","Sonstiges"];
+function bmDomain(url){ try{ return new URL(url).hostname.replace(/^www\./,""); }catch(e){ return ""; } }
+function bmSource(url){
+  const d=bmDomain(url);
+  if(/instagram\.com/.test(d)) return {icon:"📸", name:"Instagram"};
+  if(/(youtube\.com|youtu\.be)/.test(d)) return {icon:"▶️", name:"YouTube"};
+  if(/tiktok\.com/.test(d)) return {icon:"🎵", name:"TikTok"};
+  if(/(twitter\.com|x\.com)/.test(d)) return {icon:"𝕏", name:"X"};
+  if(/linkedin\.com/.test(d)) return {icon:"💼", name:"LinkedIn"};
+  if(/pinterest\./.test(d)) return {icon:"📌", name:"Pinterest"};
+  if(/(spotify\.com|apple\.com\/.*podcast)/.test(d)) return {icon:"🎧", name:"Podcast"};
+  if(d) return {icon:"🔗", name:d};
+  return {icon:"📝", name:"Notiz"};
+}
+function bmAutoCat(url, title){
+  const text=((title||"")+" "+(url||"")).toLowerCase();
+  let best=null, bestN=0;
+  BM_TOPICS.forEach(t=>{ const n=t.kw.filter(k=>text.includes(k)).length; if(n>bestN){ bestN=n; best=t.cat; } });
+  if(best) return best;
+  const s=bmSource(url).name;
+  return (s==="Instagram"||s==="TikTok"||s==="YouTube"||s==="Pinterest")?"Social & Videos":"Sonstiges";
+}
+function bmCats(){
+  const set=new Set(BM_TOPICS.map(t=>t.cat).concat(BM_EXTRA_CATS));
+  S.bookmarks.forEach(b=>{ if(b.cat) set.add(b.cat); });
+  return [...set];
+}
+function viewBookmarks(){
+  const cats=bmCats();
+  const used=[...new Set(S.bookmarks.map(b=>b.cat||"Sonstiges"))].sort();
+  let html=`<div class="view-title">Lesezeichen</div>
+    <div class="view-sub">Links, Instagram-Posts & Co. – ohne Angabe werden sie automatisch einem Thema zugeordnet.</div>
+    <div class="card">
+      <h3>Neues Lesezeichen</h3>
+      <div class="field"><input id="bmUrl" placeholder="Link einfügen (https://…) oder Notiz"></div>
+      <div class="field"><input id="bmTitle" placeholder="Titel / Notiz (optional)"></div>
+      <div class="field"><label>Thema</label>
+        <select id="bmCat"><option value="__auto">✨ Automatisch einordnen</option>${cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select></div>
+      <button class="btn" id="bmAdd" style="width:100%">Speichern</button>
+    </div>`;
+
+  if(!S.bookmarks.length){ html+=`<div class="empty">Noch keine Lesezeichen. Füg oben einen Link ein 🔖</div>`; }
+  used.forEach(c=>{
+    html+=`<div class="proj-head">🔖 ${esc(c)}</div>`;
+    S.bookmarks.filter(b=>(b.cat||"Sonstiges")===c).forEach(b=>{
+      const s=bmSource(b.url); const dom=bmDomain(b.url);
+      const isLink=/^https?:\/\//i.test(b.url||"");
+      html+=`<div class="card" data-bm="${b.id}">
+        <div class="row" style="gap:10px; align-items:flex-start">
+          <span style="font-size:20px">${s.icon}</span>
+          <div class="grow" style="min-width:0">
+            ${isLink?`<a href="${esc(b.url)}" target="_blank" rel="noopener noreferrer"><b>${esc(b.title||s.name)}</b></a>`:`<b>${esc(b.title||b.url)}</b>`}
+            <div class="tiny muted" style="margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${esc(dom||b.url)}${b.auto?" · autom. eingeordnet":""}</div>
+            <select class="small" data-bmcat style="margin-top:6px">${bmCats().map(x=>`<option value="${esc(x)}" ${x===(b.cat||"Sonstiges")?"selected":""}>${esc(x)}</option>`).join("")}</select>
+          </div>
+          <button class="btn ghost sm" data-bmdel>✕</button>
+        </div></div>`;
+    });
+  });
+
+  const v=$("#view"); v.innerHTML=html;
+  $("#bmAdd").onclick=()=>{
+    const url=$("#bmUrl").value.trim(); const title=$("#bmTitle").value.trim();
+    if(!url && !title){ toast("Link oder Titel fehlt"); return; }
+    let cat=$("#bmCat").value; let auto=false;
+    if(cat==="__auto"){ cat=bmAutoCat(url,title); auto=true; }
+    S.bookmarks.unshift({id:uid(), url, title, cat, auto, ts:todayStr()});
+    save(); render(); toast(auto?`Eingeordnet: ${cat}`:"Gespeichert 🔖");
+  };
+  $("#bmUrl").onkeydown=e=>{ if(e.key==="Enter") $("#bmAdd").click(); };
+  v.querySelectorAll("[data-bm]").forEach(card=>{
+    const id=card.dataset.bm; const b=S.bookmarks.find(x=>x.id===id); if(!b) return;
+    card.querySelector("[data-bmdel]").onclick=()=>{ S.bookmarks=S.bookmarks.filter(x=>x.id!==id); save(); render(); };
+    card.querySelector("[data-bmcat]").onchange=e=>{ b.cat=e.target.value; b.auto=false; save(); render(); };
+  });
+}
+
+$("#fab").onclick=()=>{ $("#chatSheet").classList.add("open"); renderChat(); setTimeout(()=>$("#chatInput").focus(),100); };
+$("#chatClose").onclick=()=>$("#chatSheet").classList.remove("open");
+$("#chatSheet").onclick=e=>{ if(e.target.id==="chatSheet") $("#chatSheet").classList.remove("open"); };
+$("#chatSend").onclick=chatSend;
+$("#chatInput").addEventListener("keydown",e=>{ if(e.key==="Enter") chatSend(); });
+(function(){ const cm=$("#chatMic"); if(cm){ if(!speechSupported()) cm.style.display="none"; else cm.onclick=()=>startDictation($("#chatInput"), cm); } })();
+
+/* ============================ GERÄTE-SYNC (Ende-zu-Ende) ============================ */
+function syncApiURL(){ const b=(S.sync&&S.sync.apiBase&&S.sync.apiBase.trim())||(location.origin+"/api/sync"); return b; }
+function _b64(u8){ let s=""; const CH=0x8000; for(let i=0;i<u8.length;i+=CH){ s+=String.fromCharCode.apply(null,u8.subarray(i,i+CH)); } return btoa(s); }
+function _unb64(b){ return Uint8Array.from(atob(b),c=>c.charCodeAt(0)); }
+async function _deriveKeyId(pass){
+  const enc=new TextEncoder();
+  const base=await crypto.subtle.importKey("raw",enc.encode(pass),"PBKDF2",false,["deriveKey","deriveBits"]);
+  const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:enc.encode("selbstorga-sync-v1"),iterations:120000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+  const idbits=await crypto.subtle.deriveBits({name:"PBKDF2",salt:enc.encode("selbstorga-id-v1"),iterations:60000,hash:"SHA-256"},base,256);
+  const id=[...new Uint8Array(idbits)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  return {key,id};
+}
+async function _encrypt(key,obj){
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode(JSON.stringify(obj)));
+  const out=new Uint8Array(12+ct.byteLength); out.set(iv,0); out.set(new Uint8Array(ct),12); return _b64(out);
+}
+async function _decrypt(key,b64){
+  const raw=_unb64(b64); const iv=raw.slice(0,12), ct=raw.slice(12);
+  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv},key,ct);
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+function syncStatus(msg,cls){ const el=document.getElementById("syncStatus"); if(el){ el.textContent=msg||""; el.style.color=cls==="bad"?"var(--bad)":cls==="good"?"var(--good)":"var(--muted)"; } }
+function updateSyncBtn(){ const b=document.getElementById("syncBtn"); if(b) b.style.color=(S.sync&&S.sync.enabled)?"var(--good)":"var(--muted)"; }
+async function syncPush(){
+  if(!S.sync||!S.sync.enabled||!S.sync.pass) return;
+  const {key,id}=await _deriveKeyId(S.sync.pass);
+  const clone=JSON.parse(JSON.stringify(S)); delete clone.sync;   // Passphrase/Einstellungen NICHT hochladen
+  const blob=await _encrypt(key,clone); const rev=S._rev||Date.now();
+  const r=await fetch(syncApiURL(),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({id,data:blob,updated_at:rev})});
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  S.sync.lastSync=Date.now(); _suppressPush=true; save(); _suppressPush=false;
+  syncStatus("Hochgeladen ✓","good");
+}
+async function syncPull(){
+  if(!S.sync||!S.sync.pass) return {status:"off"};
+  const {key,id}=await _deriveKeyId(S.sync.pass);
+  const r=await fetch(syncApiURL()+"?id="+encodeURIComponent(id));
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  const j=await r.json();
+  if(!j||!j.data) return {status:"empty"};
+  let remote; try{ remote=await _decrypt(key,j.data); }catch(e){ return {status:"badpass"}; }
+  const rrev=Number(j.updated_at)||0;
+  if(rrev>(S._rev||0)){
+    const keep=S.sync; _suppressPush=true;
+    S=remote; S.sync=keep; S._rev=rrev; ensureState();
+    localStorage.setItem(KEY, JSON.stringify(S)); _suppressPush=false;
+    return {status:"pulled"};
+  }
+  return {status:(S._rev||0)>rrev?"local-newer":"insync"};
+}
+async function syncConnect(pass, api){
+  pass=(pass||"").trim(); if(pass.length<6){ syncStatus("Passphrase zu kurz (mind. 6 Zeichen).","bad"); return; }
+  if(!window.crypto||!crypto.subtle){ syncStatus("Verschlüsselung hier nicht verfügbar (HTTPS nötig).","bad"); return; }
+  S.sync=S.sync||{}; S.sync.pass=pass; S.sync.apiBase=(api||"").trim(); S.sync.enabled=true;
+  _suppressPush=true; save(); _suppressPush=false; syncStatus("Verbinde …");
+  try{
+    const pr=await syncPull();
+    if(pr.status==="pulled"){ syncStatus("Daten vom Server geladen ✓","good"); render(); }
+    else if(pr.status==="badpass"){ syncStatus("Konnte Server-Daten nicht entschlüsseln – andere Passphrase?","bad"); }
+    else { await syncPush(); syncStatus("Verbunden & hochgeladen ✓","good"); }
+    updateSyncBtn();
+  }catch(e){ syncStatus("Fehler: "+(e.message||e)+" — Server erreichbar? Datenbank eingerichtet?","bad"); }
+}
+async function syncNow(){
+  if(!S.sync||!S.sync.enabled){ syncStatus("Erst verbinden.","bad"); return; }
+  syncStatus("Gleiche ab …");
+  try{ const pr=await syncPull(); if(pr.status==="pulled"){ render(); syncStatus("Aktualisiert ✓","good"); } else { await syncPush(); syncStatus("Abgeglichen ✓","good"); } updateSyncBtn(); }
+  catch(e){ syncStatus("Fehler: "+(e.message||e),"bad"); }
+}
+function syncOff(){ if(S.sync){ S.sync.enabled=false; S.sync.pass=""; } _suppressPush=true; save(); _suppressPush=false; syncStatus("Getrennt. Daten bleiben lokal auf diesem Gerät.","muted"); updateSyncBtn(); }
+
+/* ============================ INIT ============================ */
+$("#brandDate").textContent = "· "+new Date().toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});
+$("#syncBtn").onclick=()=>{ $("#syncSheet").classList.add("open"); const p=$("#syncPass"),a=$("#syncApi"); if(p)p.value=(S.sync&&S.sync.pass)||""; if(a)a.value=(S.sync&&S.sync.apiBase)||""; syncStatus((S.sync&&S.sync.enabled)?"Sync ist aktiv.":""); };
+$("#syncClose").onclick=()=>$("#syncSheet").classList.remove("open");
+$("#syncSheet").onclick=e=>{ if(e.target.id==="syncSheet") $("#syncSheet").classList.remove("open"); };
+$("#syncConnect").onclick=()=>syncConnect($("#syncPass").value,$("#syncApi").value);
+$("#syncNow").onclick=syncNow;
+$("#syncOff").onclick=syncOff;
+updateSyncBtn();
+if(S.sync&&S.sync.enabled&&S.sync.pass){ (async()=>{ try{ const pr=await syncPull(); if(pr.status==="pulled") render(); else await syncPush(); }catch(e){} })(); }
+if(!SPECIALS_LEFT.some(s=>s.k===S.ui.active) && !SPECIALS_RIGHT.some(s=>s.k===S.ui.active)
+   && !(S.ui.active||"").startsWith("area:")) S.ui.active="overview";
+render();
+</script>
+</body>
+</html>
