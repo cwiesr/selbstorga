@@ -187,6 +187,15 @@
   .gbar{height:10px; border-radius:999px; background:var(--panel2); border:1px solid var(--border); overflow:hidden; margin:8px 0}
   .gbar>i{display:block; height:100%; background:var(--good)}
   .gsug{display:inline-flex; align-items:center; gap:6px; padding:7px 11px; border-radius:999px; background:var(--panel2); border:1px solid var(--border); font-size:13px; margin:0 6px 6px 0; color:var(--text)}
+
+  /* PIN-Sperre */
+  .lock{position:fixed; inset:0; z-index:100; background:var(--bg); display:none; place-items:center; padding:24px}
+  .lock.on{display:grid}
+  .lock-box{width:100%; max-width:320px; text-align:center}
+  .lock-logo{font-size:42px}
+  .lock-title{font-weight:750; font-size:20px; margin-top:8px}
+  .lock-sub{color:var(--muted); margin:2px 0 16px}
+  .lock input{text-align:center; letter-spacing:8px; font-size:22px}
 </style>
 </head>
 <body>
@@ -260,8 +269,30 @@
         <div id="srvHistList"></div>
       </div>
 
+      <div style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px">
+        <div class="small" style="font-weight:600; margin-bottom:8px">PIN-Schutz</div>
+        <div class="tiny muted" style="margin-bottom:8px">Sperrt die App mit einer 6–8-stelligen PIN. Nach 3 Std. wird sie erneut abgefragt. Der PIN wird nur als Hash gespeichert.</div>
+        <div id="pinStatus" class="tiny" style="margin-bottom:8px"></div>
+        <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Neuer PIN (6–8 Ziffern)" autocomplete="off">
+        <div class="row" style="gap:8px; margin-top:8px">
+          <button class="btn grow" id="pinSet">PIN setzen</button>
+          <button class="btn danger" id="pinClear">Entfernen</button>
+        </div>
+      </div>
+
       <div class="tiny muted" style="margin-top:12px">Sync läuft nur in der echten Web-Version (z.B. Vercel), nicht in der Chat-Vorschau. Die Passphrase wird lokal auf diesem Gerät gespeichert, damit der Abgleich automatisch passiert.</div>
     </div>
+  </div>
+</div>
+
+<div class="lock" id="lockScreen">
+  <div class="lock-box">
+    <div class="lock-logo">🔒</div>
+    <div class="lock-title">Selbstorga gesperrt</div>
+    <div class="lock-sub">PIN eingeben</div>
+    <input id="lockPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="••••••" autocomplete="off">
+    <div id="lockMsg" class="tiny" style="min-height:16px; color:var(--bad); margin-top:6px"></div>
+    <button class="btn" id="lockGo" style="width:100%; margin-top:8px">Entsperren</button>
   </div>
 </div>
 
@@ -312,6 +343,8 @@ function seed(){
     dismissedGoalSug:[], // abgelehnte Ziel-Vorschläge (keywords)
     bookmarks:[],    // {id, url, title, cat, auto, ts}
     thoughts:[],     // {id, text, tag, ts} freie Gedanken
+    creed:"",        // persönliches Leitbild (Leitfaden)
+    security:{pinHash:"", pinSalt:""}, // PIN-Schutz
     tabOrder:[],     // frei angepasste Reihenfolge der Tabs (keys)
     ui:{active:"overview"}
   };
@@ -350,7 +383,7 @@ function save(){
 function ensureState(){
   const defs={ mindAnswers:{}, mindDayQ:{}, mindDayR:{}, mindDayQuote:{}, mindAskedQ:[], mindAskedR:[],
     mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{},
-    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], tabOrder:[],
+    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], creed:"", security:{pinHash:"",pinSalt:""}, tabOrder:[],
     sync:{enabled:false, pass:"", apiBase:""} };
   for(const k in defs){ if(S[k]==null) S[k]=defs[k]; }
   if(S._rev==null) S._rev=0;
@@ -533,6 +566,7 @@ const SPECIALS_RIGHT=[
   {k:"goals",    icon:"🎯", name:"Ziele"},
   {k:"routines", icon:"🔁", name:"Routinen"},
   {k:"mind",     icon:"🧠", name:"Mind"},
+  {k:"guide",    icon:"🧭", name:"Leitfaden"},
   {k:"ideas",    icon:"💡", name:"Ideen"},
   {k:"thoughts", icon:"💭", name:"Gedanken"},
   {k:"bookmarks",icon:"🔖", name:"Lesezeichen"},
@@ -602,6 +636,7 @@ function render(){
   if(k==="goals")    return viewGoals();
   if(k==="bookmarks")return viewBookmarks();
   if(k==="thoughts") return viewThoughts();
+  if(k==="guide")    return viewGuide();
   if(k==="chat")     return viewChat();
   if(k.startsWith("area:")) return viewArea(k.slice(5));
   viewOverview();
@@ -1312,12 +1347,22 @@ function viewMind(){
 
   if(dn<10){
     const two=assignValuesDay(today); const saved=S.valuesAns[today]||[];
-    html+=`<div class="card" style="border-color:var(--purple)">
-      <h3>Werte &amp; Ziele · Tag ${dn+1}/10</h3>
-      <div class="muted small" style="margin-bottom:10px">In den ersten 10 Tagen lernt dich das Tool kennen. Deine Antworten formen später deine Fragen des Tages.</div>
-      ${two.map((qq,i)=>`<div class="field"><label>${esc(qq)}</label><textarea data-vidx="${i}" placeholder="…">${esc(saved[i]||"")}</textarea></div>`).join("")}
-      <button class="btn" id="valSave" style="width:100%">Speichern</button>
-    </div>`;
+    const answered = two.length>0 && two.every((_,i)=>(saved[i]||"").trim());
+    if(answered && !S.ui.valuesOpen){
+      html+=`<div class="card" style="border-color:var(--purple)">
+        <div class="row center" style="justify-content:space-between; gap:8px">
+          <div><b>Werte &amp; Ziele · Tag ${dn+1}/10</b> <span class="tiny muted">✓ für heute beantwortet</span></div>
+          <button class="link" id="valEdit">bearbeiten</button>
+        </div>
+      </div>`;
+    } else {
+      html+=`<div class="card" style="border-color:var(--purple)">
+        <h3>Werte &amp; Ziele · Tag ${dn+1}/10</h3>
+        <div class="muted small" style="margin-bottom:10px">In den ersten 10 Tagen lernt dich das Tool kennen. Deine Antworten formen später deine Fragen des Tages.</div>
+        ${two.map((qq,i)=>`<div class="field"><label>${esc(qq)}</label><textarea data-vidx="${i}" placeholder="…">${esc(saved[i]||"")}</textarea></div>`).join("")}
+        <button class="btn" id="valSave" style="width:100%">Speichern</button>
+      </div>`;
+    }
   }
 
   html+=`<div class="card">
@@ -1344,7 +1389,8 @@ function viewMind(){
   const v=$("#view"); v.innerHTML=html;
   $("#mindSave").onclick=()=>{ S.mindAnswers[today]={q, a:$("#mindA").value.trim()}; save(); toast("Gespeichert 🌿"); render(); };
   const vs=$("#valSave");
-  if(vs) vs.onclick=()=>{ const arr=[]; v.querySelectorAll("[data-vidx]").forEach(t=>arr[+t.dataset.vidx]=t.value.trim()); S.valuesAns[today]=arr; save(); toast("Werte gespeichert 💜"); render(); };
+  if(vs) vs.onclick=()=>{ const arr=[]; v.querySelectorAll("[data-vidx]").forEach(t=>arr[+t.dataset.vidx]=t.value.trim()); S.valuesAns[today]=arr; S.ui.valuesOpen=false; save(); toast("Werte gespeichert 💜"); render(); };
+  const ve=$("#valEdit"); if(ve) ve.onclick=()=>{ S.ui.valuesOpen=true; render(); };
   const mtAdd=$("#mtAdd"); if(mtAdd) mtAdd.onclick=()=>{
     const tx=$("#mtText").value.trim(); if(!tx){ toast("Gedanke fehlt"); return; }
     S.myThoughts.unshift({id:uid(), text:tx, source:$("#mtSrc").value.trim(), ts:todayStr()}); save(); render(); toast("Gedanke gespeichert 💡");
@@ -1810,6 +1856,55 @@ function viewThoughts(){
   v.querySelectorAll("[data-th]").forEach(card=>{ const id=card.dataset.th; card.querySelector("[data-thdel]").onclick=()=>{ S.thoughts=S.thoughts.filter(x=>x.id!==id); save(); render(); }; });
 }
 
+/* ============================ VIEW: LEBENSLEITFADEN ============================ */
+function guideText(){
+  const vals=collectValues();
+  let s="MEIN LEBENSLEITFADEN\n\n";
+  if(S.creed) s+="Leitbild:\n"+S.creed+"\n\n";
+  if(vals.length){ s+="Wer ich bin & was mir wichtig ist:\n"; vals.forEach(v=>{ s+="- "+(v.q?v.q:"")+"\n  "+v.a+"\n"; }); s+="\n"; }
+  if(S.myThoughts.length){ s+="Leitsätze:\n"; S.myThoughts.forEach(t=>s+="- \""+t.text+"\""+(t.source?" — "+t.source:"")+"\n"); s+="\n"; }
+  if(S.wishes.length){ s+="Was ich erleben will:\n"; S.wishes.forEach(w=>s+="- "+w.title+(w.done?" (erlebt)":"")+"\n"); s+="\n"; }
+  if(S.goals.length){ s+="Ziele:\n"; S.goals.forEach(g=>s+="- ["+g.cat+"] "+g.title+"\n"); s+="\n"; }
+  return s;
+}
+function viewGuide(){
+  const vals=collectValues();
+  const st=moodStats();
+  const recentMind=Object.keys(S.mindAnswers).filter(d=>S.mindAnswers[d]&&S.mindAnswers[d].a).sort().reverse().slice(0,6);
+  const sec=(title, inner)=> inner ? `<div class="card"><h3>${title}</h3>${inner}</div>` : "";
+
+  let html=`<div class="view-title">Lebensleitfaden</div>
+    <div class="view-sub">Wer du bist, was dir wichtig ist, wonach du leben willst — automatisch aus deinen eigenen Einträgen.</div>
+    <div class="card" style="border-color:var(--accent-dim)">
+      <h3>Mein Leitbild</h3>
+      <textarea id="creedText" placeholder="In ein, zwei Sätzen: Wofür stehst du? Wie willst du leben?" style="min-height:72px">${esc(S.creed||"")}</textarea>
+      <button class="btn" id="creedSave" style="width:100%; margin-top:8px">Speichern</button>
+    </div>`;
+
+  const valsInner = vals.length
+    ? vals.slice(0,14).map(v=>`<div style="padding:7px 0; border-top:1px solid var(--border)"><div class="tiny muted">${esc(trimWords(v.q,12))}</div><div>${esc(v.a)}</div></div>`).join("")
+    : `<div class="muted small">Beantworte im <b>Mind</b>-Tab die Werte-Fragen (erste 10 Tage) — sie erscheinen hier automatisch.</div>`;
+  html+=sec("Wer ich bin &amp; was mir wichtig ist", valsInner);
+
+  if(S.myThoughts.length) html+=sec("Leitsätze &amp; Weisheiten", S.myThoughts.slice(0,14).map(t=>`<div style="padding:7px 0; border-top:1px solid var(--border)">„${esc(t.text)}"${t.source?`<div class="tiny muted">— ${esc(t.source)}</div>`:""}</div>`).join(""));
+
+  if(st.avg!=null){
+    const dimLine=MOOD_DIMS.filter(d=>d.pos).map(d=>st.dimAvg[d.key]!=null?`${esc(d.label.replace("Wie ","").replace("?",""))}: <b>${st.dimAvg[d.key].toFixed(1)}</b>/10`:null).filter(Boolean).join(" &nbsp;·&nbsp; ");
+    html+=sec("Wonach ich streben will", `<div class="small muted" style="margin-bottom:6px">Deine Richtwerte aus dem Gefühls-Check:</div><div class="small">${dimLine}</div>`);
+  }
+
+  if(recentMind.length) html+=sec("Meine Reflexionen", recentMind.map(d=>{const e=S.mindAnswers[d];return `<div style="padding:7px 0; border-top:1px solid var(--border)"><div class="tiny muted">${fmtDate(d)}${e.q?` · ${esc(trimWords(e.q,10))}`:""}</div><div>${esc(e.a)}</div></div>`;}).join(""));
+  if(S.wishes.length) html+=sec("Was ich erleben will", S.wishes.slice(0,18).map(w=>`<div class="small" style="padding:3px 0">• ${esc(w.title)}${w.done?" ✓":""}</div>`).join(""));
+  if(S.goals.length) html+=sec("Meine Ziele", S.goals.map(g=>`<div class="small" style="padding:3px 0">${g.cat==="privat"?"🏡":"💼"} ${esc(g.title)}</div>`).join(""));
+  if(S.thoughts.length) html+=sec("Gedanken", S.thoughts.slice(0,8).map(t=>`<div style="padding:7px 0; border-top:1px solid var(--border)">${esc(trimWords(t.text,45))}</div>`).join(""));
+
+  html+=`<button class="btn sec" id="guideExport" style="width:100%; margin-top:6px">⬇︎ Als Text exportieren</button>`;
+
+  const v=$("#view"); v.innerHTML=html;
+  $("#creedSave").onclick=()=>{ S.creed=$("#creedText").value.trim(); save(); toast("Leitbild gespeichert 🧭"); };
+  $("#guideExport").onclick=()=>{ try{ const blob=new Blob([guideText()],{type:"text/plain"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="mein-lebensleitfaden.txt"; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},200);}catch(e){toast("Export fehlgeschlagen");} };
+}
+
 $("#fab").onclick=()=>{ $("#chatSheet").classList.add("open"); renderChat(); setTimeout(()=>$("#chatInput").focus(),100); };
 $("#chatClose").onclick=()=>$("#chatSheet").classList.remove("open");
 $("#chatSheet").onclick=e=>{ if(e.target.id==="chatSheet") $("#chatSheet").classList.remove("open"); };
@@ -1892,6 +1987,32 @@ async function syncNow(){
 }
 function syncOff(){ if(S.sync){ S.sync.enabled=false; S.sync.pass=""; } _suppressPush=true; save(); _suppressPush=false; syncStatus("Getrennt. Daten bleiben lokal auf diesem Gerät.","muted"); updateSyncBtn(); }
 
+/* ---- PIN-Schutz (alle 3 Std.) ---- */
+async function sha256hex(str){ const b=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join(""); }
+function pinIsSet(){ return !!(S.security && S.security.pinHash); }
+const LOCK_MS=3*60*60*1000;
+function markUnlocked(){ try{ localStorage.setItem(KEY+".unlockedAt", String(Date.now())); }catch(e){} }
+function shouldLock(){ if(!pinIsSet()) return false; let t=0; try{ t=+(localStorage.getItem(KEY+".unlockedAt")||0); }catch(e){} return (Date.now()-t)>LOCK_MS; }
+function showLock(){ const el=document.getElementById("lockScreen"); if(!el) return; el.classList.add("on"); const i=document.getElementById("lockPin"); if(i){ i.value=""; setTimeout(()=>{ try{i.focus();}catch(e){} },120); } const m=document.getElementById("lockMsg"); if(m) m.textContent=""; }
+function hideLock(){ const el=document.getElementById("lockScreen"); if(el) el.classList.remove("on"); }
+function lockCheck(){ if(shouldLock()) showLock(); }
+async function tryUnlock(){
+  const i=document.getElementById("lockPin"); const m=document.getElementById("lockMsg"); const pin=((i&&i.value)||"").trim();
+  if(!pin) return;
+  try{ const h=await sha256hex((S.security.pinSalt||"")+pin);
+    if(h===S.security.pinHash){ markUnlocked(); hideLock(); }
+    else { if(m) m.textContent="Falscher PIN"; if(i){ i.value=""; i.focus(); } }
+  }catch(e){ if(m) m.textContent="Fehler bei der Prüfung"; }
+}
+async function setPin(pin){
+  pin=(pin||"").trim();
+  if(!/^\d{6,8}$/.test(pin)){ toast("PIN muss 6–8 Ziffern haben"); return false; }
+  if(!window.crypto||!crypto.subtle){ toast("Hier nicht verfügbar (HTTPS nötig)"); return false; }
+  const salt=[...crypto.getRandomValues(new Uint8Array(8))].map(b=>b.toString(16).padStart(2,"0")).join("");
+  S.security={pinHash:await sha256hex(salt+pin), pinSalt:salt}; save(); markUnlocked(); return true;
+}
+function clearPin(){ S.security={pinHash:"",pinSalt:""}; save(); }
+
 /* ---- Sicherung / Export / Import ---- */
 function exportData(){
   try{
@@ -1959,7 +2080,8 @@ async function loadServerHistory(){
 /* ============================ INIT ============================ */
 $("#brandDate").textContent = "· "+new Date().toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});
 $("#syncBtn").onclick=()=>{ $("#syncSheet").classList.add("open"); const p=$("#syncPass"),a=$("#syncApi"); if(p)p.value=(S.sync&&S.sync.pass)||""; if(a)a.value=(S.sync&&S.sync.apiBase)||""; syncStatus((S.sync&&S.sync.enabled)?"Sync ist aktiv.":"");
-  const ri=$("#restoreInfo"); if(ri){ const sw=+(localStorage.getItem(KEY+".safeW")||0); ri.textContent = sw>0 ? `Lokale Sicherung: ${sw} Einträge gespeichert.` : "Noch keine lokale Sicherung."; } };
+  const ri=$("#restoreInfo"); if(ri){ const sw=+(localStorage.getItem(KEY+".safeW")||0); ri.textContent = sw>0 ? `Lokale Sicherung: ${sw} Einträge gespeichert.` : "Noch keine lokale Sicherung."; }
+  const ps=$("#pinStatus"); if(ps){ ps.textContent=pinIsSet()?"PIN aktiv ✓":"Kein PIN gesetzt"; ps.style.color=pinIsSet()?"var(--good)":"var(--muted)"; } };
 $("#syncClose").onclick=()=>$("#syncSheet").classList.remove("open");
 $("#syncSheet").onclick=e=>{ if(e.target.id==="syncSheet") $("#syncSheet").classList.remove("open"); };
 $("#syncConnect").onclick=()=>syncConnect($("#syncPass").value,$("#syncApi").value);
@@ -1971,7 +2093,13 @@ $("#impFile").onchange=e=>{ if(e.target.files&&e.target.files[0]) importFile(e.t
 $("#restoreBtn").onclick=restoreBackup;
 $("#histBtn").onclick=renderHistList;
 $("#srvHistBtn").onclick=loadServerHistory;
+$("#pinSet").onclick=async ()=>{ const inp=$("#pinInput"); const ok=await setPin(inp.value); if(ok){ inp.value=""; const st=$("#pinStatus"); if(st){ st.textContent="PIN aktiv ✓"; st.style.color="var(--good)"; } toast("PIN gesetzt 🔒"); } };
+$("#pinClear").onclick=()=>{ clearPin(); const st=$("#pinStatus"); if(st){ st.textContent="Kein PIN gesetzt"; st.style.color="var(--muted)"; } toast("PIN entfernt"); };
+$("#lockGo").onclick=tryUnlock;
+$("#lockPin").addEventListener("keydown",e=>{ if(e.key==="Enter") tryUnlock(); });
+if(document.addEventListener) document.addEventListener("visibilitychange",()=>{ if(!document.hidden) lockCheck(); });
 updateSyncBtn();
+lockCheck();
 if(S.sync&&S.sync.enabled&&S.sync.pass){ (async()=>{ try{ const pr=await syncPull(); if(pr.status==="pulled") render(); else await syncPush(); }catch(e){} })(); }
 if(!SPECIALS_LEFT.some(s=>s.k===S.ui.active) && !SPECIALS_RIGHT.some(s=>s.k===S.ui.active)
    && !(S.ui.active||"").startsWith("area:")) S.ui.active="overview";
