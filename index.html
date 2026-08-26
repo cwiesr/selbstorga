@@ -1707,6 +1707,7 @@ $("#chatInput").addEventListener("keydown",e=>{ if(e.key==="Enter") chatSend(); 
 
 /* ============================ GERÄTE-SYNC (Ende-zu-Ende) ============================ */
 function syncApiURL(){ const b=(S.sync&&S.sync.apiBase&&S.sync.apiBase.trim())||(location.origin+"/api/sync"); return b; }
+function stateWeight(s){ if(!s) return 0; return (s.todos?s.todos.length:0)+(s.goals?s.goals.length:0)+(s.bookmarks?s.bookmarks.length:0)+(s.ideas?s.ideas.length:0)+(s.wishes?s.wishes.length:0)+(s.myThoughts?s.myThoughts.length:0)+(s.mindAnswers?Object.keys(s.mindAnswers).length:0)+(s.mood?Object.keys(s.mood).length:0)+(s.areas&&s.areas.length>2?s.areas.length-2:0); }
 function _b64(u8){ let s=""; const CH=0x8000; for(let i=0;i<u8.length;i+=CH){ s+=String.fromCharCode.apply(null,u8.subarray(i,i+CH)); } return btoa(s); }
 function _unb64(b){ return Uint8Array.from(atob(b),c=>c.charCodeAt(0)); }
 async function _deriveKeyId(pass){
@@ -1749,6 +1750,8 @@ async function syncPull(){
   let remote; try{ remote=await _decrypt(key,j.data); }catch(e){ return {status:"badpass"}; }
   const rrev=Number(j.updated_at)||0;
   if(rrev>(S._rev||0)){
+    // Schutz: ein (fast) leerer Server-Stand darf einen vollen lokalen Stand nicht überschreiben
+    if(stateWeight(remote)===0 && stateWeight(S)>0) return {status:"local-newer"};
     const keep=S.sync; _suppressPush=true;
     S=remote; S.sync=keep; S._rev=rrev; ensureState();
     localStorage.setItem(KEY, JSON.stringify(S)); _suppressPush=false;
