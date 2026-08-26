@@ -289,6 +289,7 @@ function seed(){
     chat:[],         // {role:'me'|'bot', text, ts}
     suggested:[],    // wish titles already suggested
     savedReminders:[], // [{text, ts}] gespeicherte Lebens-Erinnerungen
+    savedQuotes:[],  // [{t, a, ts}] gespeicherte Zitate
     goals:[],        // {id, title, cat:'privat'|'beruflich', keywords:[], checks:[{date,rating,note}], created}
     myThoughts:[],   // {id, text, source, ts} eigene kluge Gedanken
     dismissedGoalSug:[], // abgelehnte Ziel-Vorschläge (keywords)
@@ -311,7 +312,7 @@ function save(){
 function ensureState(){
   const defs={ mindAnswers:{}, mindDayQ:{}, mindDayR:{}, mindDayQuote:{}, mindAskedQ:[], mindAskedR:[],
     mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{},
-    savedReminders:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], tabOrder:[],
+    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], tabOrder:[],
     sync:{enabled:false, pass:"", apiBase:""} };
   for(const k in defs){ if(S[k]==null) S[k]=defs[k]; }
   if(S._rev==null) S._rev=0;
@@ -1223,14 +1224,24 @@ function viewMind(){
   const cur=S.mindAnswers[today]; const ans=cur?cur.a:"";
   const dn=dayNumber();
   const own=ownWordsReminder(today);
+  const qSaved=S.savedQuotes.some(x=>x.t===quote.t);
 
   let html=`<div class="view-title">Mind · Leben</div>
     <div class="view-sub">Kurz innehalten. Es geht ums Leben, nicht nur ums Erledigen.</div>
 
     <div class="card" style="border-color:var(--accent-dim)">
-      <h3>Zitat des Tages</h3>
-      <div class="quote">„${esc(quote.t)}"</div>
+      <div class="row" style="justify-content:space-between; align-items:flex-start; gap:8px">
+        <h3 style="margin:0">Zitat des Tages</h3>
+        <button class="btn ghost" id="qSave" title="Zitat speichern" style="font-size:20px; padding:2px 6px; color:${qSaved?'var(--warn)':'var(--muted)'}">${qSaved?"★":"☆"}</button>
+      </div>
+      <div class="quote" style="margin-top:8px">„${esc(quote.t)}"</div>
       <div class="qauthor">— ${esc(quote.a)}</div>
+      ${S.savedQuotes.length?`<button class="link" id="qToggle" style="margin-top:10px; display:inline-block">★ Gespeicherte Zitate (${S.savedQuotes.length})</button>`:""}
+      ${S.ui.showSavedQuotes&&S.savedQuotes.length?`<div style="margin-top:6px">${S.savedQuotes.map((qz,i)=>`
+        <div class="row" style="gap:8px; align-items:flex-start; padding:8px 0; border-top:1px solid var(--border)">
+          <div class="grow small">„${esc(qz.t)}"<div class="tiny muted" style="margin-top:2px">— ${esc(qz.a)}</div></div>
+          <button class="btn ghost sm" data-qdel="${i}">✕</button>
+        </div>`).join("")}</div>`:""}
     </div>
 
     <div class="card">
@@ -1290,6 +1301,13 @@ function viewMind(){
     S.myThoughts.unshift({id:uid(), text:tx, source:$("#mtSrc").value.trim(), ts:todayStr()}); save(); render(); toast("Gedanke gespeichert 💡");
   };
   v.querySelectorAll("[data-mtdel]").forEach(b=>b.onclick=()=>{ S.myThoughts=S.myThoughts.filter(x=>x.id!==b.dataset.mtdel); save(); render(); });
+  const qs=$("#qSave"); if(qs) qs.onclick=()=>{
+    if(S.savedQuotes.some(x=>x.t===quote.t)){ S.savedQuotes=S.savedQuotes.filter(x=>x.t!==quote.t); toast("Entfernt"); }
+    else { S.savedQuotes.unshift({t:quote.t, a:quote.a, ts:todayStr()}); toast("Zitat gespeichert ★"); }
+    save(); render();
+  };
+  const qt=$("#qToggle"); if(qt) qt.onclick=()=>{ S.ui.showSavedQuotes=!S.ui.showSavedQuotes; save(); render(); };
+  v.querySelectorAll("[data-qdel]").forEach(b=>b.onclick=()=>{ S.savedQuotes.splice(+b.dataset.qdel,1); save(); render(); });
 }
 
 /* ============================ VIEW: IDEAS ============================ */
