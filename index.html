@@ -48,6 +48,8 @@
   .tab.active{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600}
   .tab .dot{width:8px;height:8px;border-radius:50%}
   .tab.add{color:var(--accent); font-weight:700}
+  .tab.editing{border-style:dashed; border-color:var(--accent)}
+  .tab .mv{padding:0 5px; font-size:13px; color:var(--accent); font-weight:700}
 
   main{padding:14px 14px 96px; max-width:760px; margin:0 auto}
   .view-title{font-size:22px; font-weight:750; margin:4px 0 2px}
@@ -291,6 +293,7 @@ function seed(){
     myThoughts:[],   // {id, text, source, ts} eigene kluge Gedanken
     dismissedGoalSug:[], // abgelehnte Ziel-Vorschläge (keywords)
     bookmarks:[],    // {id, url, title, cat, auto, ts}
+    tabOrder:[],     // frei angepasste Reihenfolge der Tabs (keys)
     ui:{active:"overview"}
   };
 }
@@ -308,7 +311,7 @@ function save(){
 function ensureState(){
   const defs={ mindAnswers:{}, mindDayQ:{}, mindDayR:{}, mindDayQuote:{}, mindAskedQ:[], mindAskedR:[],
     mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{},
-    savedReminders:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[],
+    savedReminders:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], tabOrder:[],
     sync:{enabled:false, pass:"", apiBase:""} };
   for(const k in defs){ if(S[k]==null) S[k]=defs[k]; }
   if(S._rev==null) S._rev=0;
@@ -496,20 +499,45 @@ const SPECIALS_RIGHT=[
   {k:"wishes",   icon:"🌟", name:"Wünsche"},
   {k:"chat",     icon:"💬", name:"Chat"},
 ];
+function tabMeta(key){
+  const sp=[...SPECIALS_LEFT,...SPECIALS_RIGHT].find(s=>s.k===key);
+  if(sp) return {label:`${sp.icon} ${esc(sp.name)}`, dot:null};
+  if(key.startsWith("area:")){ const a=areaById(key.slice(5)); if(a) return {label:`${esc(a.icon||"")} ${esc(a.name)}`, dot:a.color}; }
+  return null;
+}
+function currentTabOrder(){
+  const defaults=[...SPECIALS_LEFT.map(s=>s.k), ...S.areas.map(a=>"area:"+a.id), ...SPECIALS_RIGHT.map(s=>s.k)];
+  const defSet=new Set(defaults);
+  let order=(S.tabOrder||[]).filter(k=>defSet.has(k));
+  defaults.forEach(k=>{ if(!order.includes(k)) order.push(k); });
+  S.tabOrder=order;
+  return order;
+}
+function moveTab(key, dir){
+  const order=S.tabOrder; const i=order.indexOf(key); if(i<0) return;
+  const j=dir==="left"?i-1:i+1; if(j<0||j>=order.length) return;
+  [order[i],order[j]]=[order[j],order[i]]; save(); renderTabs();
+}
 function renderTabs(){
-  const bar=$("#tabbar"); bar.innerHTML="";
-  const mk=(active,html,onclick,cls="")=>{
+  const bar=$("#tabbar"); const sl=bar.scrollLeft; bar.innerHTML="";
+  const order=currentTabOrder(); const edit=!!S.ui.editTabs;
+  order.forEach((k,idx)=>{
+    const meta=tabMeta(k); if(!meta) return;
     const b=document.createElement("button");
-    b.className="tab "+(active?"active ":"")+cls; b.innerHTML=html; b.onclick=onclick; return b;
-  };
-  SPECIALS_LEFT.forEach(s=>bar.appendChild(mk(S.ui.active===s.k, `${s.icon} ${s.name}`, ()=>go(s.k))));
-  S.areas.forEach(a=>{
-    bar.appendChild(mk(S.ui.active==="area:"+a.id,
-      `<span class="dot" style="background:${a.color}"></span>${esc(a.icon||"")} ${esc(a.name)}`,
-      ()=>go("area:"+a.id)));
+    b.className="tab "+(S.ui.active===k?"active ":"")+(edit?"editing":"");
+    const dot=meta.dot?`<span class="dot" style="background:${meta.dot}"></span>`:"";
+    if(edit){
+      b.innerHTML=`<span class="mv" data-mv="left" style="${idx===0?"opacity:.25":""}">◀</span>${dot}${meta.label}<span class="mv" data-mv="right" style="${idx===order.length-1?"opacity:.25":""}">▶</span>`;
+      b.onclick=(e)=>{ const t=e.target.closest("[data-mv]"); if(t) moveTab(k, t.dataset.mv); };
+    } else {
+      b.innerHTML=dot+meta.label; b.onclick=()=>go(k);
+    }
+    bar.appendChild(b);
   });
-  bar.appendChild(mk(false, "＋", addArea, "add"));
-  SPECIALS_RIGHT.forEach(s=>bar.appendChild(mk(S.ui.active===s.k, `${s.icon} ${s.name}`, ()=>go(s.k))));
+  const add=document.createElement("button"); add.className="tab add"; add.textContent="＋"; add.title="Bereich hinzufügen"; add.onclick=addArea; bar.appendChild(add);
+  const et=document.createElement("button"); et.className="tab"+(edit?" active":""); et.innerHTML=edit?"✓ Fertig":"↔"; et.title="Tabs anordnen";
+  et.onclick=()=>{ S.ui.editTabs=!S.ui.editTabs; save(); renderTabs(); }; bar.appendChild(et);
+  bar.scrollLeft=sl;
 }
 function go(k){ S.ui.active=k; save(); render(); window.scrollTo(0,0); }
 async function addArea(){
