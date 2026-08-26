@@ -254,6 +254,10 @@
         <input type="file" id="impFile" accept="application/json,.json" style="display:none">
         <button class="btn sec" id="restoreBtn" style="width:100%; margin-top:8px">↩︎ Aus lokaler Sicherung wiederherstellen</button>
         <div id="restoreInfo" class="tiny muted" style="margin-top:6px"></div>
+        <button class="btn sec" id="histBtn" style="width:100%; margin-top:10px">🕘 Frühere Versionen (dieses Gerät)</button>
+        <div id="histList"></div>
+        <button class="btn sec" id="srvHistBtn" style="width:100%; margin-top:10px">☁︎ Frühere Versionen (Server)</button>
+        <div id="srvHistList"></div>
       </div>
 
       <div class="tiny muted" style="margin-top:12px">Sync läuft nur in der echten Web-Version (z.B. Vercel), nicht in der Chat-Vorschau. Die Passphrase wird lokal auf diesem Gerät gespeichert, damit der Abgleich automatisch passiert.</div>
@@ -323,6 +327,19 @@ function save(){
     if(w>0){
       const cur=+(localStorage.getItem(KEY+".safeW")||0);
       if(w>=cur){ localStorage.setItem(KEY+".safe", JSON.stringify(S)); localStorage.setItem(KEY+".safeW", String(w)); }
+      // Versions-Historie: Schnappschuss alle ~90s oder sobald der Umfang schrumpft
+      const now=Date.now();
+      const lastTs=+(localStorage.getItem(KEY+".histTs")||0);
+      const lastW=+(localStorage.getItem(KEY+".histW")||0);
+      if(now-lastTs>90000 || w<lastW){
+        let idx=[]; try{ idx=JSON.parse(localStorage.getItem(KEY+".histIdx")||"[]"); }catch(e){}
+        localStorage.setItem(KEY+".h."+now, localStorage.getItem(KEY));
+        idx.push({ts:now, w});
+        while(idx.length>20){ const old=idx.shift(); try{ localStorage.removeItem(KEY+".h."+old.ts); }catch(e){} }
+        localStorage.setItem(KEY+".histIdx", JSON.stringify(idx));
+        localStorage.setItem(KEY+".histTs", String(now));
+        localStorage.setItem(KEY+".histW", String(w));
+      }
     }
   }catch(e){}
   if(!_suppressPush && S.sync && S.sync.enabled && S.sync.pass){
@@ -1857,6 +1874,39 @@ function restoreBackup(){
     if(adoptState(JSON.parse(raw))) toast("Aus lokaler Sicherung wiederhergestellt ✓");
   }catch(e){ toast("Wiederherstellung fehlgeschlagen"); }
 }
+function restoreHist(ts){
+  try{ const raw=localStorage.getItem(KEY+".h."+ts); if(!raw){ toast("Version nicht gefunden"); return; }
+    if(adoptState(JSON.parse(raw))) toast("Version wiederhergestellt ✓"); }catch(e){ toast("Fehler bei Wiederherstellung"); }
+}
+function renderHistList(){
+  const el=$("#histList"); if(!el) return;
+  let idx=[]; try{ idx=JSON.parse(localStorage.getItem(KEY+".histIdx")||"[]"); }catch(e){}
+  if(!idx.length){ el.innerHTML=`<div class="tiny muted" style="margin-top:6px">Noch keine Versionen gespeichert.</div>`; return; }
+  el.innerHTML=idx.slice().reverse().map(v=>`<div class="row center" style="justify-content:space-between; gap:8px; padding:7px 0; border-top:1px solid var(--border)">
+      <span class="small">${new Date(v.ts).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} · ${v.w} Einträge</span>
+      <button class="btn sm" data-hres="${v.ts}">Laden</button></div>`).join("");
+  el.querySelectorAll("[data-hres]").forEach(b=>b.onclick=()=>restoreHist(+b.dataset.hres));
+}
+async function loadServerHistory(){
+  const el=$("#srvHistList"); if(el) el.innerHTML=`<div class="tiny muted" style="margin-top:6px">Lade Server-Versionen…</div>`;
+  try{
+    if(!S.sync||!S.sync.pass){ if(el) el.innerHTML=`<div class="tiny muted">Nicht verbunden – erst Passphrase eingeben.</div>`; return; }
+    const {key,id}=await _deriveKeyId(S.sync.pass);
+    const r=await fetch(syncApiURL()+"?id="+encodeURIComponent(id)+"&history=1");
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j=await r.json();
+    const rows=(j&&j.history)||[];
+    if(!rows.length){ if(el) el.innerHTML=`<div class="tiny muted">Keine Server-Versionen vorhanden.</div>`; return; }
+    const items=[];
+    for(const row of rows){ try{ const st=await _decrypt(key,row.data); items.push({created:row.created_at, w:stateWeight(st), todos:(st.todos||[]).length, data:st}); }catch(e){} }
+    if(!items.length){ if(el) el.innerHTML=`<div class="tiny muted">Server-Versionen nicht entschlüsselbar (andere Passphrase?).</div>`; return; }
+    window.__srvHist=items;
+    if(el) el.innerHTML=items.map((it,i)=>`<div class="row center" style="justify-content:space-between; gap:8px; padding:7px 0; border-top:1px solid var(--border)">
+        <span class="small">${new Date(it.created).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})} · ${it.todos} To-dos</span>
+        <button class="btn sm" data-sres="${i}">Laden</button></div>`).join("");
+    if(el) el.querySelectorAll("[data-sres]").forEach(b=>b.onclick=()=>{ const it=window.__srvHist[+b.dataset.sres]; if(it && adoptState(it.data)) toast("Server-Version wiederhergestellt ✓"); });
+  }catch(e){ if(el) el.innerHTML=`<div class="tiny muted" style="color:var(--bad)">Fehler: ${esc(e.message||e)}</div>`; }
+}
 
 /* ============================ INIT ============================ */
 $("#brandDate").textContent = "· "+new Date().toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit"});
@@ -1871,6 +1921,8 @@ $("#expBtn").onclick=exportData;
 $("#impBtn").onclick=()=>$("#impFile").click();
 $("#impFile").onchange=e=>{ if(e.target.files&&e.target.files[0]) importFile(e.target.files[0]); e.target.value=""; };
 $("#restoreBtn").onclick=restoreBackup;
+$("#histBtn").onclick=renderHistList;
+$("#srvHistBtn").onclick=loadServerHistory;
 updateSyncBtn();
 if(S.sync&&S.sync.enabled&&S.sync.pass){ (async()=>{ try{ const pr=await syncPull(); if(pr.status==="pulled") render(); else await syncPush(); }catch(e){} })(); }
 if(!SPECIALS_LEFT.some(s=>s.k===S.ui.active) && !SPECIALS_RIGHT.some(s=>s.k===S.ui.active)
