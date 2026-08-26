@@ -311,6 +311,7 @@ function seed(){
     myThoughts:[],   // {id, text, source, ts} eigene kluge Gedanken
     dismissedGoalSug:[], // abgelehnte Ziel-Vorschläge (keywords)
     bookmarks:[],    // {id, url, title, cat, auto, ts}
+    thoughts:[],     // {id, text, tag, ts} freie Gedanken
     tabOrder:[],     // frei angepasste Reihenfolge der Tabs (keys)
     ui:{active:"overview"}
   };
@@ -349,7 +350,7 @@ function save(){
 function ensureState(){
   const defs={ mindAnswers:{}, mindDayQ:{}, mindDayR:{}, mindDayQuote:{}, mindAskedQ:[], mindAskedR:[],
     mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{},
-    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], tabOrder:[],
+    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], tabOrder:[],
     sync:{enabled:false, pass:"", apiBase:""} };
   for(const k in defs){ if(S[k]==null) S[k]=defs[k]; }
   if(S._rev==null) S._rev=0;
@@ -533,6 +534,7 @@ const SPECIALS_RIGHT=[
   {k:"routines", icon:"🔁", name:"Routinen"},
   {k:"mind",     icon:"🧠", name:"Mind"},
   {k:"ideas",    icon:"💡", name:"Ideen"},
+  {k:"thoughts", icon:"💭", name:"Gedanken"},
   {k:"bookmarks",icon:"🔖", name:"Lesezeichen"},
   {k:"wishes",   icon:"🌟", name:"Wünsche"},
   {k:"chat",     icon:"💬", name:"Chat"},
@@ -599,6 +601,7 @@ function render(){
   if(k==="wishes")   return viewWishes();
   if(k==="goals")    return viewGoals();
   if(k==="bookmarks")return viewBookmarks();
+  if(k==="thoughts") return viewThoughts();
   if(k==="chat")     return viewChat();
   if(k.startsWith("area:")) return viewArea(k.slice(5));
   viewOverview();
@@ -1762,6 +1765,51 @@ function viewBookmarks(){
   });
 }
 
+/* ============================ VIEW: GEDANKEN ============================ */
+function viewThoughts(){
+  const tags=[...new Set(S.thoughts.map(t=>t.tag).filter(Boolean))].sort();
+  const filter=S.ui.thoughtTag||"alle";
+  let list=S.thoughts.slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
+  if(filter!=="alle") list=list.filter(t=>t.tag===filter);
+
+  let html=`<div class="view-title">Gedanken</div>
+    <div class="view-sub">Schnell festhalten, was dir durch den Kopf geht.</div>
+    <div class="card">
+      <h3>Neuer Gedanke</h3>
+      <div class="field"><textarea id="thText" placeholder="Was denkst du gerade?" style="min-height:80px"></textarea></div>
+      <div class="row">
+        <input id="thTag" class="grow" placeholder="Tag (optional, z.B. Arbeit, Idee)" list="thTagList">
+        <button class="btn" id="thAdd">Speichern</button>
+      </div>
+      <datalist id="thTagList">${tags.map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+    </div>`;
+
+  if(tags.length){
+    html+=`<div class="catrow">
+      <button class="catchip ${filter==="alle"?"on":""}" data-thtag="alle">Alle</button>
+      ${tags.map(t=>`<button class="catchip ${filter===t?"on":""}" data-thtag="${esc(t)}">${esc(t)}</button>`).join("")}
+    </div>`;
+  }
+
+  if(!list.length){ html+=`<div class="empty">Noch keine Gedanken. Schreib den ersten auf 💭</div>`; }
+  list.forEach(t=>{
+    html+=`<div class="card" data-th="${t.id}">
+      <div style="white-space:pre-wrap; word-break:break-word">${esc(t.text)}</div>
+      <div class="row center" style="justify-content:space-between; gap:8px; margin-top:8px">
+        <span class="tiny muted">${new Date(t.ts).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}${t.tag?` · ${esc(t.tag)}`:""}</span>
+        <button class="btn ghost sm" data-thdel>✕</button>
+      </div>
+    </div>`;
+  });
+
+  const v=$("#view"); v.innerHTML=html;
+  const add=()=>{ const tx=$("#thText").value.trim(); if(!tx){ toast("Gedanke fehlt"); return; }
+    S.thoughts.unshift({id:uid(), text:tx, tag:$("#thTag").value.trim(), ts:Date.now()}); save(); render(); toast("Gedanke gespeichert 💭"); };
+  $("#thAdd").onclick=add;
+  v.querySelectorAll("[data-thtag]").forEach(b=>b.onclick=()=>{ S.ui.thoughtTag=b.dataset.thtag; save(); render(); });
+  v.querySelectorAll("[data-th]").forEach(card=>{ const id=card.dataset.th; card.querySelector("[data-thdel]").onclick=()=>{ S.thoughts=S.thoughts.filter(x=>x.id!==id); save(); render(); }; });
+}
+
 $("#fab").onclick=()=>{ $("#chatSheet").classList.add("open"); renderChat(); setTimeout(()=>$("#chatInput").focus(),100); };
 $("#chatClose").onclick=()=>$("#chatSheet").classList.remove("open");
 $("#chatSheet").onclick=e=>{ if(e.target.id==="chatSheet") $("#chatSheet").classList.remove("open"); };
@@ -1771,7 +1819,7 @@ $("#chatInput").addEventListener("keydown",e=>{ if(e.key==="Enter") chatSend(); 
 
 /* ============================ GERÄTE-SYNC (Ende-zu-Ende) ============================ */
 function syncApiURL(){ const b=(S.sync&&S.sync.apiBase&&S.sync.apiBase.trim())||(location.origin+"/api/sync"); return b; }
-function stateWeight(s){ if(!s) return 0; return (s.todos?s.todos.length:0)+(s.goals?s.goals.length:0)+(s.bookmarks?s.bookmarks.length:0)+(s.ideas?s.ideas.length:0)+(s.wishes?s.wishes.length:0)+(s.myThoughts?s.myThoughts.length:0)+(s.mindAnswers?Object.keys(s.mindAnswers).length:0)+(s.mood?Object.keys(s.mood).length:0)+(s.areas&&s.areas.length>2?s.areas.length-2:0); }
+function stateWeight(s){ if(!s) return 0; return (s.todos?s.todos.length:0)+(s.goals?s.goals.length:0)+(s.bookmarks?s.bookmarks.length:0)+(s.ideas?s.ideas.length:0)+(s.wishes?s.wishes.length:0)+(s.myThoughts?s.myThoughts.length:0)+(s.thoughts?s.thoughts.length:0)+(s.mindAnswers?Object.keys(s.mindAnswers).length:0)+(s.mood?Object.keys(s.mood).length:0)+(s.areas&&s.areas.length>2?s.areas.length-2:0); }
 function _b64(u8){ let s=""; const CH=0x8000; for(let i=0;i<u8.length;i+=CH){ s+=String.fromCharCode.apply(null,u8.subarray(i,i+CH)); } return btoa(s); }
 function _unb64(b){ return Uint8Array.from(atob(b),c=>c.charCodeAt(0)); }
 async function _deriveKeyId(pass){
