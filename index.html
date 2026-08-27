@@ -2039,6 +2039,14 @@ async function syncNow(){
 }
 function syncOff(){ if(S.sync){ S.sync.enabled=false; S.sync.pass=""; } _suppressPush=true; save(); _suppressPush=false; syncStatus("Getrennt. Daten bleiben lokal auf diesem Gerät.","muted"); updateSyncBtn(); }
 
+/* automatischer Abgleich im Hintergrund (beim Fokus + Intervall), damit ein offenes Gerät neue Daten mitbekommt */
+let _lastAutoPull=0;
+async function syncAutoPull(force){
+  if(!(S.sync&&S.sync.enabled&&S.sync.pass)) return;
+  const now=Date.now(); if(!force && now-_lastAutoPull<12000) return; _lastAutoPull=now;
+  try{ const pr=await syncPull(); if(pr && pr.status==="pulled") render(); }catch(e){}
+}
+
 /* ---- PIN-Schutz (alle 3 Std.) ---- */
 async function sha256hex(str){ const b=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join(""); }
 function pinIsSet(){ return !!(S.security && S.security.pinHash); }
@@ -2149,7 +2157,9 @@ $("#pinSet").onclick=async ()=>{ const inp=$("#pinInput"); const ok=await setPin
 $("#pinClear").onclick=()=>{ clearPin(); const st=$("#pinStatus"); if(st){ st.textContent="Kein PIN gesetzt"; st.style.color="var(--muted)"; } toast("PIN entfernt"); };
 $("#lockGo").onclick=tryUnlock;
 $("#lockPin").addEventListener("keydown",e=>{ if(e.key==="Enter") tryUnlock(); });
-if(document.addEventListener) document.addEventListener("visibilitychange",()=>{ if(!document.hidden) lockCheck(); });
+if(document.addEventListener) document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ lockCheck(); syncAutoPull(true); } });
+if(window.addEventListener) window.addEventListener("focus",()=>{ syncAutoPull(true); });
+setInterval(()=>{ if(!document.hidden) syncAutoPull(); }, 30000);
 updateSyncBtn();
 lockCheck();
 if(S.sync&&S.sync.enabled&&S.sync.pass){ (async()=>{ try{ const pr=await syncPull(); if(pr.status==="pulled") render(); else await syncPush(); }catch(e){} })(); }
