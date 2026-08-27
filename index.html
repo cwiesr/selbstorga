@@ -72,9 +72,10 @@
 
   .todo{background:var(--panel); border:1px solid var(--border); border-radius:12px; margin-bottom:10px; overflow:hidden}
   .todo.done{opacity:.55}
-  /* Spalten-/Board-Ansicht */
-  .board{display:flex; gap:10px; overflow-x:auto; padding:2px 2px 10px; -webkit-overflow-scrolling:touch}
-  .bcol{flex:0 0 var(--colw,250px); width:var(--colw,250px); background:var(--panel2); border:1px solid var(--border); border-radius:12px; display:flex; flex-direction:column; align-self:flex-start}
+  /* Spalten-/Board-Ansicht – sprengt die 760px-Spalte und nutzt die volle Fensterbreite */
+  .board{display:flex; gap:12px; overflow-x:auto; padding:2px 12px 12px; -webkit-overflow-scrolling:touch;
+    width:calc(100vw - 20px); margin-left:calc(50% - 50vw + 10px); scroll-snap-type:x proximity}
+  .bcol{flex:0 0 var(--colw,320px); width:var(--colw,320px); background:var(--panel2); border:1px solid var(--border); border-radius:12px; display:flex; flex-direction:column; align-self:flex-start; scroll-snap-align:start}
   .bcol-head{font-weight:700; font-size:14px; padding:10px 12px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--panel2); border-radius:12px 12px 0 0; z-index:1}
   .bcol-body{padding:8px; min-height:48px}
   .bcol-body .todo{margin-bottom:8px}
@@ -865,21 +866,31 @@ function chooseColumn(id){
   $("#modalOk").onclick=close; $("#modalCancel").onclick=close; $("#modalX").onclick=close;
   m.onclick=e=>{ if(e.target.id==="modal") close(); };
 }
-function areaBoard(mine){
+function boardColW(){ return Math.max(220, Math.min(680, S.ui.boardColW||320)); }
+function areaBoard(mine, showArea){
   const openMine=mine.filter(t=>todoOpen(t));
-  const w=S.ui.boardColW||250;
+  const w=boardColW();
   let h=`<div class="board" style="--colw:${w}px">`;
   BOARD_COLS.forEach(c=>{
     const items=openMine.filter(t=>colOf(t)===c.key).sort((x,y)=>urgency(y)-urgency(x));
     h+=`<div class="bcol" data-col="${c.key}">
       <div class="bcol-head">${c.label} <span class="tiny muted">${items.length}</span></div>
-      <div class="bcol-body">${items.map(t=>todoCard(t,false,true)).join("")||`<div class="tiny muted" style="padding:10px 4px">Hierher ziehen …</div>`}</div>
+      <div class="bcol-body">${items.map(t=>todoCard(t,!!showArea,true)).join("")||`<div class="tiny muted" style="padding:10px 4px">Hierher ziehen …</div>`}</div>
     </div>`;
   });
   h+=`</div>`;
   const doneMine=mine.filter(t=>todoDone(t));
-  if(doneMine.length) h+=`<div class="proj-head" style="margin-top:16px">✓ Erledigt (${doneMine.length})</div>`+doneMine.slice(0,20).map(t=>todoCard(t,false)).join("");
+  if(doneMine.length) h+=`<div class="proj-head" style="margin-top:16px">✓ Erledigt (${doneMine.length})</div>`+doneMine.slice(0,20).map(t=>todoCard(t,!!showArea)).join("");
   return h;
+}
+/* gemeinsame Breiten-Steuerung ◄ ► */
+function boardWidthControls(){
+  return `<button class="btn ghost sm" id="colNarrow" title="Spalten schmaler">◄</button>
+          <button class="btn ghost sm" id="colWide" title="Spalten breiter">►</button>`;
+}
+function bindBoardWidth(root){
+  const cn=root.querySelector("#colNarrow"); if(cn) cn.onclick=()=>{ S.ui.boardColW=Math.max(220,boardColW()-40); save(); render(); };
+  const cw=root.querySelector("#colWide"); if(cw) cw.onclick=()=>{ S.ui.boardColW=Math.min(680,boardColW()+40); save(); render(); };
 }
 function bindBoard(root){
   let dragId=null;
@@ -915,7 +926,14 @@ function viewOverview(){
   const remOv=mindReminder(todayStr()); const owOv=ownWordsReminder(todayStr());
   const savedNow=S.savedReminders.some(r=>r.text===remOv);
 
-  let html=`<div class="view-title">Übersicht</div>
+  const ovBoard=!!S.ui.ovBoard;
+  let html=`<div class="row center" style="justify-content:space-between; flex-wrap:wrap; gap:6px">
+      <div class="view-title">Übersicht</div>
+      <div class="row" style="gap:4px; flex-wrap:wrap">
+        <button class="btn ghost sm" id="ovBoardToggle" title="Ansicht wechseln">${ovBoard?"☰ Liste":"▦ Spalten"}</button>
+        ${ovBoard?boardWidthControls():""}
+      </div>
+    </div>
     <div class="view-sub">${WD[new Date().getDay()]}, ${new Date().toLocaleDateString("de-DE")} · ${open.length} offen · heute ${doneToday} erledigt ✓</div>
 
     <div class="card" style="border-color:var(--accent-dim)">
@@ -946,6 +964,9 @@ function viewOverview(){
       <div class="tiny muted" style="margin-top:8px">Landet als wichtiges To-do im Eingang. Für mehr Details → Chat 💬</div>
     </div>`;
 
+  if(ovBoard){
+    html+=areaBoard(S.todos, true);
+  } else {
   if(followToday.length){
     html+=`<div class="proj-head">🔔 Jetzt nachhaken</div>`;
     html+=followToday.map(t=>todoCard(t,true)).join("");
@@ -973,8 +994,12 @@ function viewOverview(){
   html+=`<div class="proj-head">🎯 Am wichtigsten gerade</div>`;
   html+= top.length ? top.map(t=>todoCard(t,true)).join("")
                     : `<div class="empty">Keine offenen To-dos. Genieß den freien Kopf ✨</div>`;
+  } // Ende Listen-Ansicht Übersicht
 
   const v=$("#view"); v.innerHTML=html; bindTodos(v);
+  $("#ovBoardToggle").onclick=()=>{ S.ui.ovBoard=!S.ui.ovBoard; save(); render(); };
+  bindBoardWidth(v);
+  if(ovBoard) bindBoard(v);
   const q=$("#qadd"), qb=$("#qaddBtn");
   const doQ=()=>{ const val=q.value.trim(); if(!val) return;
     const due=$("#qdue").value||null;
@@ -1027,7 +1052,7 @@ function viewArea(id){
       <div class="view-title">${esc(a.icon||"")} ${esc(a.name)}</div>
       <div class="row" style="gap:4px; flex-wrap:wrap">
         <button class="btn ghost sm" id="boardToggle" title="Ansicht wechseln">${board?"☰ Liste":"▦ Spalten"}</button>
-        ${board?`<button class="btn ghost sm" id="colNarrow" title="Spalten schmaler">◄</button><button class="btn ghost sm" id="colWide" title="Spalten breiter">►</button>`:""}
+        ${board?boardWidthControls():""}
         <button class="btn ghost sm" id="areaEdit">✏️</button>
         <button class="btn ghost sm" id="areaDel">🗑</button>
       </div>
@@ -1133,8 +1158,7 @@ function viewArea(id){
   const toggleAdd=()=>{ S.ui.addCollapsed=!S.ui.addCollapsed; save(); render(); };
   const nh=$("#ntHead"); if(nh) nh.onclick=(e)=>{ if(e.target.closest("input,select,textarea")) return; toggleAdd(); };
   $("#boardToggle").onclick=()=>{ S.ui.boardMode=!S.ui.boardMode; save(); render(); };
-  const cn=$("#colNarrow"); if(cn) cn.onclick=()=>{ S.ui.boardColW=Math.max(190,(S.ui.boardColW||250)-30); save(); render(); };
-  const cw=$("#colWide"); if(cw) cw.onclick=()=>{ S.ui.boardColW=Math.min(460,(S.ui.boardColW||250)+30); save(); render(); };
+  bindBoardWidth(v);
   bindTodos(v);
   if(board) bindBoard(v);
 }
@@ -2415,7 +2439,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.5";
+const APP_VERSION="2026-08-27.6";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
