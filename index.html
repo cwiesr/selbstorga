@@ -1978,9 +1978,36 @@ function renderChat(){
   }
   log.scrollTop=log.scrollHeight;
 }
+/* Chat-Befehle: „(bitte) idee erfassen …", „gedanke …", „wunsch …" -> in den passenden Tab */
+function captureCommand(text){
+  const defs=[
+    {coll:"ideas",     kind:"Idee",    tab:"Ideen",        words:"idee|ideen"},
+    {coll:"thoughts",  kind:"Gedanke", tab:"Gedanken",     words:"gedanke|gedanken"},
+    {coll:"wishes",    kind:"Wunsch",  tab:"Wünsche",      words:"wunsch|wünsche|lebenswunsch"},
+  ];
+  const verb="erfassen|notieren|speichern|aufnehmen|hinzuf[üu]gen|anlegen|merken";
+  for(const d of defs){
+    const pats=[
+      new RegExp("^\\s*(?:bitte\\s+)?(?:neue[nr]?\\s+|neues\\s+)?(?:"+d.words+")\\s+(?:"+verb+")\\s*[:\\-]?\\s*(.+)$","i"),
+      new RegExp("^\\s*(?:bitte\\s+)?(?:neue[nr]?\\s+|neues\\s+)(?:"+d.words+")\\s*[:\\-]?\\s*(.+)$","i"),
+      new RegExp("^\\s*(?:"+d.words+")\\s*:\\s*(.+)$","i"),
+    ];
+    for(const re of pats){ const m=text.match(re); if(m && m[1] && m[1].trim()) return {coll:d.coll, kind:d.kind, tab:d.tab, content:m[1].trim()}; }
+  }
+  return null;
+}
 function chatProcess(text){
   text=(text||"").trim(); if(!text) return null;
   S.chat.push({role:"me", text, ts:Date.now()});
+  const cmd=captureCommand(text);
+  if(cmd){
+    const now=Date.now();
+    if(cmd.coll==="ideas") S.ideas.unshift({id:uid(), title:cmd.content, topic:"Allgemein", notes:"", ts:todayStr(), updatedAt:now});
+    else if(cmd.coll==="thoughts") S.thoughts.unshift({id:uid(), text:cmd.content, tag:"", ts:now, updatedAt:now});
+    else if(cmd.coll==="wishes") S.wishes.unshift({id:uid(), title:cmd.content, cat:"Sonstiges", notes:"", done:false, ts:todayStr(), updatedAt:now});
+    S.chat.push({role:"bot", text:`💡 ${cmd.kind} im Tab „${cmd.tab}" gespeichert:\n„${cmd.content}"`, ts:now});
+    save(); return {captured:cmd};
+  }
   const p=parseTodo(text);
   const t=addTodo({title:p.title, priority:p.priority, dueDate:p.dueDate, followUpDate:p.followUpDate, areaId:p.areaId});
   const a=areaById(t.areaId);
@@ -2021,7 +2048,11 @@ function chatBubbles(){
 Beispiele:
 • „Angebot schreiben bis Freitag wichtig Arbeit"
 • „Zahnarzt anrufen morgen Privat"
-• „Präsentation bis 12.09. nachhaken in 3 Tagen"</div>`;
+• „Präsentation bis 12.09. nachhaken in 3 Tagen"
+Oder direkt in einen Tab erfassen:
+• „bitte idee erfassen …" → Tab Ideen
+• „gedanke erfassen …" → Tab Gedanken
+• „wunsch erfassen …" → Tab Wünsche</div>`;
   return S.chat.map(m=>`<div class="wa-bubble ${m.role==="me"?"me":"bot"}">${esc(m.text)}</div>`).join("");
 }
 function viewChat(){
@@ -2600,7 +2631,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.9";
+const APP_VERSION="2026-08-27.10";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
