@@ -1432,7 +1432,7 @@ function viewMind(){
     const tx=$("#mtText").value.trim(); if(!tx){ toast("Gedanke fehlt"); return; }
     S.myThoughts.unshift({id:uid(), text:tx, source:$("#mtSrc").value.trim(), ts:todayStr()}); save(); render(); toast("Gedanke gespeichert 💡");
   };
-  v.querySelectorAll("[data-mtdel]").forEach(b=>b.onclick=()=>{ S.myThoughts=S.myThoughts.filter(x=>x.id!==b.dataset.mtdel); save(); render(); });
+  v.querySelectorAll("[data-mtdel]").forEach(b=>b.onclick=()=>{ const mid=b.dataset.mtdel; uiConfirm("Diesen Gedanken löschen?","Löschen").then(ok=>{ if(ok){ S.myThoughts=S.myThoughts.filter(x=>x.id!==mid); save(); render(); } }); });
   const qs=$("#qSave"); if(qs) qs.onclick=()=>{
     if(S.savedQuotes.some(x=>x.t===quote.t)){ S.savedQuotes=S.savedQuotes.filter(x=>x.t!==quote.t); toast("Entfernt"); }
     else { S.savedQuotes.unshift({t:quote.t, a:quote.a, ts:todayStr()}); toast("Zitat gespeichert ★"); }
@@ -1481,7 +1481,7 @@ function viewIdeas(){
   v.querySelectorAll("[data-idea]").forEach(card=>{
     const id=card.dataset.idea;
     card.querySelectorAll("[data-idact]").forEach(b=>b.onclick=()=>{
-      if(b.dataset.idact==="del"){ S.ideas=S.ideas.filter(x=>x.id!==id); save(); render(); }
+      if(b.dataset.idact==="del"){ uiConfirm("Diese Idee löschen?","Löschen").then(ok=>{ if(ok){ S.ideas=S.ideas.filter(x=>x.id!==id); save(); render(); } }); }
       if(b.dataset.idact==="topromote"){
         const i=S.ideas.find(x=>x.id===id);
         addTodo({title:i.title, notes:i.notes, priority:2, areaId:ensureInbox().id});
@@ -1571,7 +1571,7 @@ function viewWishes(){
     card.querySelectorAll("[data-wact]").forEach(b=>b.onclick=()=>{
       const w=S.wishes.find(x=>x.id===id);
       if(b.dataset.wact==="toggle"){ w.done=!w.done; save(); render(); if(w.done) toast("Erlebt! 🎉"); }
-      if(b.dataset.wact==="del"){ S.wishes=S.wishes.filter(x=>x.id!==id); save(); render(); }
+      if(b.dataset.wact==="del"){ uiConfirm("Diesen Wunsch löschen?","Löschen").then(ok=>{ if(ok){ S.wishes=S.wishes.filter(x=>x.id!==id); save(); render(); } }); }
     });
   });
 }
@@ -1901,7 +1901,7 @@ function viewThoughts(){
   v.querySelectorAll("[data-thtag]").forEach(b=>b.onclick=()=>{ S.ui.thoughtTag=b.dataset.thtag; save(); render(); });
   v.querySelectorAll("[data-th]").forEach(card=>{
     const id=card.dataset.th; const t=S.thoughts.find(x=>x.id===id); if(!t) return;
-    const del=card.querySelector("[data-thdel]"); if(del) del.onclick=()=>{ S.thoughts=S.thoughts.filter(x=>x.id!==id); save(); render(); };
+    const del=card.querySelector("[data-thdel]"); if(del) del.onclick=()=>{ uiConfirm("Diesen Gedanken löschen?","Löschen").then(ok=>{ if(ok){ S.thoughts=S.thoughts.filter(x=>x.id!==id); save(); render(); } }); };
     const edb=card.querySelector("[data-thedbtn]"); if(edb) edb.onclick=()=>{ S.ui.editThought=id; render(); };
     const sv=card.querySelector("[data-thsave]"); if(sv) sv.onclick=()=>{ const nv=card.querySelector("[data-thedit]").value.trim(); if(!nv){ toast("Text fehlt"); return; } t.text=nv; t.tag=card.querySelector("[data-thedittag]").value.trim(); S.ui.editThought=null; save(); render(); toast("Gespeichert"); };
     const cn=card.querySelector("[data-thcancel]"); if(cn) cn.onclick=()=>{ S.ui.editThought=null; render(); };
