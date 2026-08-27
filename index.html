@@ -76,10 +76,16 @@
   .board{display:flex; gap:12px; overflow-x:auto; padding:2px 12px 12px; -webkit-overflow-scrolling:touch;
     width:calc(100vw - 20px); margin-left:calc(50% - 50vw + 10px); scroll-snap-type:x proximity}
   .bcol{flex:0 0 var(--colw,320px); width:var(--colw,320px); background:var(--panel2); border:1px solid var(--border); border-radius:12px; display:flex; flex-direction:column; align-self:flex-start; scroll-snap-align:start}
-  .bcol-head{font-weight:700; font-size:14px; padding:10px 12px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--panel2); border-radius:12px 12px 0 0; z-index:1}
+  .bcol-head{font-weight:700; font-size:14px; padding:8px 10px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--panel2); border-radius:12px 12px 0 0; z-index:1; display:flex; align-items:center; gap:6px}
   .bcol-body{padding:8px; min-height:48px}
   .bcol-body .todo{margin-bottom:8px}
   .bcol.dragover{outline:2px dashed var(--accent); outline-offset:-2px}
+  .bcol-head .wctl{display:inline-flex; gap:2px; margin-left:auto}
+  .btn.xs{padding:2px 7px; min-height:26px; font-size:12px; line-height:1}
+  /* Erledigt-Panel */
+  .donerow{display:flex; align-items:center; gap:10px; padding:9px 10px; border:1px solid var(--border); border-radius:10px; background:var(--panel); margin-bottom:6px}
+  .donerow .donecheck{flex:0 0 auto; width:20px;height:20px;border-radius:6px; background:var(--good); color:#fff; display:grid; place-items:center; font-size:12px}
+  .donerow .donetitle{font-weight:600; text-decoration:line-through; opacity:.75; word-break:break-word}
   .todo[data-board]{cursor:grab}
   .todo[data-board].dragging{opacity:.45}
   .drag-h{flex:0 0 auto; color:var(--muted2); cursor:grab; font-size:16px; line-height:1; padding:2px 2px 0; user-select:none}
@@ -866,33 +872,89 @@ function chooseColumn(id){
   $("#modalOk").onclick=close; $("#modalCancel").onclick=close; $("#modalX").onclick=close;
   m.onclick=e=>{ if(e.target.id==="modal") close(); };
 }
-function boardColW(){ return Math.max(220, Math.min(680, S.ui.boardColW||320)); }
-function areaBoard(mine, showArea){
+const COL_MIN=180, COL_MAX=760, COL_STEP=20, COL_DEFAULT=320;
+function colWidth(key){
+  const m=S.ui.boardColWByKey||{};
+  const v = (m[key]!=null ? m[key] : (S.ui.boardColW||COL_DEFAULT));
+  return Math.max(COL_MIN, Math.min(COL_MAX, v));
+}
+function setColWidth(key, delta){
+  S.ui.boardColWByKey=S.ui.boardColWByKey||{};
+  S.ui.boardColWByKey[key]=Math.max(COL_MIN, Math.min(COL_MAX, colWidth(key)+delta));
+  save(); render();
+}
+function areaBoard(mine, showArea, ctxKey){
   const openMine=mine.filter(t=>todoOpen(t));
-  const w=boardColW();
-  let h=`<div class="board" style="--colw:${w}px">`;
+  let h=`<div class="board">`;
   BOARD_COLS.forEach(c=>{
     const items=openMine.filter(t=>colOf(t)===c.key).sort((x,y)=>urgency(y)-urgency(x));
-    h+=`<div class="bcol" data-col="${c.key}">
-      <div class="bcol-head">${c.label} <span class="tiny muted">${items.length}</span></div>
+    const w=colWidth(c.key);
+    h+=`<div class="bcol" data-col="${c.key}" style="flex-basis:${w}px; width:${w}px">
+      <div class="bcol-head"><span>${c.label} <span class="tiny muted">${items.length}</span></span>
+        <span class="wctl">
+          <button class="btn ghost xs" data-cw="${c.key}" data-dir="-1" title="schmaler">◄</button>
+          <button class="btn ghost xs" data-cw="${c.key}" data-dir="1" title="breiter">►</button>
+        </span></div>
       <div class="bcol-body">${items.map(t=>todoCard(t,!!showArea,true)).join("")||`<div class="tiny muted" style="padding:10px 4px">Hierher ziehen …</div>`}</div>
     </div>`;
   });
   h+=`</div>`;
-  const doneMine=mine.filter(t=>todoDone(t));
-  if(doneMine.length) h+=`<div class="proj-head" style="margin-top:16px">✓ Erledigt (${doneMine.length})</div>`+doneMine.slice(0,20).map(t=>todoCard(t,!!showArea)).join("");
+  h+=donePanel(mine.filter(t=>todoDone(t)), ctxKey||"board", !!showArea);
   return h;
 }
-/* gemeinsame Breiten-Steuerung ◄ ► */
-function boardWidthControls(){
-  return `<button class="btn ghost sm" id="colNarrow" title="Spalten schmaler">◄</button>
-          <button class="btn ghost sm" id="colWide" title="Spalten breiter">►</button>`;
+/* ---- Erledigt ansehen & zurückholen ---- */
+function doneDateOf(t){
+  if(t.daily){ const ks=Object.keys(t.dailyLog||{}).filter(k=>t.dailyLog[k]).sort(); return ks[ks.length-1]||t.doneAt||t.createdAt; }
+  return t.doneAt||t.createdAt;
 }
-function bindBoardWidth(root){
-  const cn=root.querySelector("#colNarrow"); if(cn) cn.onclick=()=>{ S.ui.boardColW=Math.max(220,boardColW()-40); save(); render(); };
-  const cw=root.querySelector("#colWide"); if(cw) cw.onclick=()=>{ S.ui.boardColW=Math.min(680,boardColW()+40); save(); render(); };
+function restoreTodo(id){
+  const t=S.todos.find(x=>x.id===id); if(!t) return;
+  if(t.daily){ if(t.dailyLog) delete t.dailyLog[todayStr()]; if(t.dailyUntil && todayStr()>t.dailyUntil){ /* abgelaufenes Tages-To-do wieder aktivieren */ t.dailyUntil=null; } }
+  else { t.done=false; t.doneAt=null; }
+  t.updatedAt=Date.now(); save(); render(); toast("Zurückgeholt ↩︎");
+}
+function doneRow(t, showArea){
+  const a=areaById(t.areaId); const dd=doneDateOf(t);
+  return `<div class="donerow" data-id="${t.id}">
+    <span class="donecheck">✓</span>
+    <div class="grow" style="min-width:0">
+      <div class="donetitle">${esc(t.title)}</div>
+      <div class="tiny muted">${showArea&&a?`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${a.color}"></span> ${esc(a.name)} · `:""}${dd?fmtDate(dd):""}${t.daily?" · 🔁":""}</div>
+    </div>
+    <button class="btn ghost sm" data-restore="${t.id}" title="Als offen zurückholen">↩︎ zurück</button>
+  </div>`;
+}
+function donePanel(doneList, ctxKey, showArea){
+  if(!doneList.length) return "";
+  const open=!!(S.ui.doneOpen||{})[ctxKey];
+  let h=`<button class="proj-head" data-donetoggle="${esc(ctxKey)}" style="display:flex; align-items:center; gap:8px; width:100%; text-align:left; background:none; border:none; color:var(--text); cursor:pointer; margin-top:16px; padding-left:0">
+      <span class="muted">${open?"▼":"▶"}</span> ✓ Erledigt (${doneList.length})
+    </button>`;
+  if(open){
+    const today=todayStr();
+    const y=new Date(); y.setDate(y.getDate()-1); const yest=y.toISOString().slice(0,10);
+    const d7=[]; for(let i=0;i<7;i++){ const d=new Date(); d.setDate(d.getDate()-i); d7.push(d.toISOString().slice(0,10)); }
+    const buckets=[["Heute",[]],["Gestern",[]],["Diese Woche",[]],["Älter",[]]];
+    [...doneList].sort((a,b)=>String(doneDateOf(b)).localeCompare(String(doneDateOf(a)))).forEach(t=>{
+      const dd=doneDateOf(t);
+      if(dd===today) buckets[0][1].push(t);
+      else if(dd===yest) buckets[1][1].push(t);
+      else if(d7.includes(dd)) buckets[2][1].push(t);
+      else buckets[3][1].push(t);
+    });
+    buckets.forEach(([label,items])=>{ if(!items.length) return;
+      h+=`<div class="tiny muted" style="margin:10px 0 5px; font-weight:700; letter-spacing:.3px">${label} · ${items.length}</div>`;
+      h+=items.map(t=>doneRow(t, showArea)).join("");
+    });
+  }
+  return h;
+}
+function bindDone(root){
+  root.querySelectorAll("[data-restore]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); restoreTodo(b.dataset.restore); });
+  root.querySelectorAll("[data-donetoggle]").forEach(b=>b.onclick=()=>{ const k=b.dataset.donetoggle; S.ui.doneOpen=S.ui.doneOpen||{}; S.ui.doneOpen[k]=!S.ui.doneOpen[k]; save(); render(); });
 }
 function bindBoard(root){
+  root.querySelectorAll("[data-cw]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); setColWidth(b.dataset.cw, (+b.dataset.dir)*COL_STEP); });
   let dragId=null;
   root.querySelectorAll('.todo[data-board]').forEach(el=>{
     el.addEventListener("dragstart", e=>{
@@ -931,7 +993,6 @@ function viewOverview(){
       <div class="view-title">Übersicht</div>
       <div class="row" style="gap:4px; flex-wrap:wrap">
         <button class="btn ghost sm" id="ovBoardToggle" title="Ansicht wechseln">${ovBoard?"☰ Liste":"▦ Spalten"}</button>
-        ${ovBoard?boardWidthControls():""}
       </div>
     </div>
     <div class="view-sub">${WD[new Date().getDay()]}, ${new Date().toLocaleDateString("de-DE")} · ${open.length} offen · heute ${doneToday} erledigt ✓</div>
@@ -965,7 +1026,7 @@ function viewOverview(){
     </div>`;
 
   if(ovBoard){
-    html+=areaBoard(S.todos, true);
+    html+=areaBoard(S.todos, true, "overview");
   } else {
   if(followToday.length){
     html+=`<div class="proj-head">🔔 Jetzt nachhaken</div>`;
@@ -994,11 +1055,11 @@ function viewOverview(){
   html+=`<div class="proj-head">🎯 Am wichtigsten gerade</div>`;
   html+= top.length ? top.map(t=>todoCard(t,true)).join("")
                     : `<div class="empty">Keine offenen To-dos. Genieß den freien Kopf ✨</div>`;
+  html+=donePanel(S.todos.filter(t=>todoDone(t)), "overview", true);
   } // Ende Listen-Ansicht Übersicht
 
-  const v=$("#view"); v.innerHTML=html; bindTodos(v);
+  const v=$("#view"); v.innerHTML=html; bindTodos(v); bindDone(v);
   $("#ovBoardToggle").onclick=()=>{ S.ui.ovBoard=!S.ui.ovBoard; save(); render(); };
-  bindBoardWidth(v);
   if(ovBoard) bindBoard(v);
   const q=$("#qadd"), qb=$("#qaddBtn");
   const doQ=()=>{ const val=q.value.trim(); if(!val) return;
@@ -1052,7 +1113,6 @@ function viewArea(id){
       <div class="view-title">${esc(a.icon||"")} ${esc(a.name)}</div>
       <div class="row" style="gap:4px; flex-wrap:wrap">
         <button class="btn ghost sm" id="boardToggle" title="Ansicht wechseln">${board?"☰ Liste":"▦ Spalten"}</button>
-        ${board?boardWidthControls():""}
         <button class="btn ghost sm" id="areaEdit">✏️</button>
         <button class="btn ghost sm" id="areaDel">🗑</button>
       </div>
@@ -1090,7 +1150,7 @@ function viewArea(id){
   }
 
   if(board){
-    html+=areaBoard(mine);
+    html+=areaBoard(mine, false, "area:"+id);
   } else {
   noProj.sort((x,y)=>urgency(y)-urgency(x));
   if(noProj.length) html+=noProj.map(t=>todoCard(t,false)).join("");
@@ -1113,7 +1173,7 @@ function viewArea(id){
         </div>
         ${collapsed?"":`<div style="margin-top:10px">
           ${openP.length?openP.map(t=>todoCard(t,false)).join(""):`<div class="tiny muted" style="padding:4px 0">Keine offenen To-dos.</div>`}
-          ${doneP.length?`<details style="margin-top:4px"><summary class="tiny muted" style="cursor:pointer">✓ ${doneP.length} erledigt anzeigen</summary><div style="margin-top:8px">${doneP.slice(0,20).map(t=>todoCard(t,false)).join("")}</div></details>`:""}
+          ${doneP.length?`<div class="tiny muted" style="padding:4px 0">✓ ${doneP.length} erledigt – siehe „Erledigt" unten</div>`:""}
         </div>`}
       </div>`;
     });
@@ -1121,11 +1181,7 @@ function viewArea(id){
 
   if(!openT.length && !projectNames.length) html+=`<div class="empty">Noch keine To-dos in „${esc(a.name)}". Leg oben eins an.</div>`;
 
-  const doneNoProj=doneT.filter(t=>!t.project);
-  if(doneNoProj.length){
-    html+=`<div class="proj-head">✓ Erledigt (${doneNoProj.length})</div>`;
-    html+=doneNoProj.slice(0,20).map(t=>todoCard(t,false)).join("");
-  }
+  html+=donePanel(doneT, "area:"+id, false);
   } // Ende Listen-Ansicht
 
   const v=$("#view"); v.innerHTML=html;
@@ -1158,8 +1214,8 @@ function viewArea(id){
   const toggleAdd=()=>{ S.ui.addCollapsed=!S.ui.addCollapsed; save(); render(); };
   const nh=$("#ntHead"); if(nh) nh.onclick=(e)=>{ if(e.target.closest("input,select,textarea")) return; toggleAdd(); };
   $("#boardToggle").onclick=()=>{ S.ui.boardMode=!S.ui.boardMode; save(); render(); };
-  bindBoardWidth(v);
   bindTodos(v);
+  bindDone(v);
   if(board) bindBoard(v);
 }
 async function editArea(a){
@@ -2439,7 +2495,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.6";
+const APP_VERSION="2026-08-27.7";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
