@@ -667,6 +667,7 @@ function todoCard(t, showArea){
       <button class="chev" data-act="open">${t.open?"▲":"▼"}</button>
     </div>
     <div class="todo-detail">
+      <div class="field"><label>Titel</label><input data-f="title" value="${esc(t.title)}"></div>
       <div class="field"><label>Notiz</label><textarea data-f="notes" placeholder="Notizen…">${esc(t.notes)}</textarea></div>
       <div class="grid2">
         <div class="field"><label>Wichtigkeit</label>
@@ -680,7 +681,8 @@ function todoCard(t, showArea){
         <div class="field"><label>Frist (erledigt bis)</label><input type="date" data-f="dueDate" value="${t.dueDate||""}"></div>
         <div class="field"><label>Nachhaken am</label><input type="date" data-f="followUpDate" value="${t.followUpDate||""}"></div>
       </div>
-      <div class="field"><label>Projekt (optional – gruppiert im Bereich)</label><input data-f="project" list="projListArea" value="${esc(t.project)}" placeholder="z.B. Website Relaunch"></div>
+      <div class="field"><label>Projekt (optional – gruppiert im Bereich)</label><input data-f="project" list="projListArea" value="${esc(t.project)}" placeholder="z.B. Website Relaunch">
+        ${t.project?`<button class="btn sec sm" data-act="unproject" style="margin-top:6px">↑ Aus Projekt lösen (zu normalen To-dos)</button>`:""}</div>
       <div class="field"><label>Milestones / Teilschritte</label>
         <div data-ms>${t.milestones.map(m=>`
           <div class="ms ${m.done?"done":""}" data-mid="${m.id}">
@@ -718,6 +720,7 @@ function bindTodos(root){
         }
         if(act==="ms-toggle"){ const mid=btn.closest("[data-mid]").dataset.mid; const m=t.milestones.find(x=>x.id===mid); m.done=!m.done; save(); render(); return; }
         if(act==="ms-del"){ const mid=btn.closest("[data-mid]").dataset.mid; t.milestones=t.milestones.filter(x=>x.id!==mid); save(); render(); return; }
+        if(act==="unproject"){ t.project=""; save(); render(); toast("Aus Projekt gelöst"); return; }
       });
     });
     el.querySelectorAll("[data-f]").forEach(inp=>{
@@ -725,8 +728,9 @@ function bindTodos(root){
         let v=inp.value; const f=inp.dataset.f;
         if(f==="priority") v=+v;
         if(f==="dueDate"||f==="followUpDate") v=v||null;
+        if(f==="title" && !String(v).trim()) return; // Titel nicht leeren
         t[f]=v; save();
-        if(f==="areaId"||f==="project"||f==="priority"||f==="dueDate") render();
+        if(f==="areaId"||f==="project"||f==="priority"||f==="dueDate"||f==="title") render();
       });
     });
   });
@@ -829,6 +833,25 @@ function viewArea(id){
   const groups={}; const noProj=[];
   openT.forEach(t=>{ if(t.project){ (groups[t.project]=groups[t.project]||[]).push(t);} else noProj.push(t); });
   const projectNames=[...new Set(mine.filter(t=>t.project).map(t=>t.project))].sort();
+  // Vorschläge: Projekte aus ALLEN Tabs + Namen der anderen Tabs
+  const projSuggest=[...new Set(
+    S.todos.filter(t=>t.project).map(t=>t.project)
+      .concat(S.areas.filter(x=>x.id!==id).map(x=>x.name))
+  )].sort();
+  // Verschiebe-Vorschlag: To-do hat ein Projekt, das zu einem anderen Tab passt
+  let moveSug=null;
+  for(const t of openT){
+    if(!t.project) continue;
+    const dk=t.id+"@"+id;
+    if((S.ui.dismissedMove||[]).includes(dk)) continue;
+    let target=S.areas.find(x=>x.id!==id && x.name.toLowerCase()===t.project.toLowerCase());
+    let clearProject=!!target;
+    if(!target){
+      const other=S.todos.find(x=>x.areaId!==id && x.project && x.project.toLowerCase()===t.project.toLowerCase());
+      if(other){ target=areaById(other.areaId); clearProject=false; }
+    }
+    if(target){ moveSug={t, target, clearProject, dk}; break; }
+  }
 
   let html=`<div class="row center" style="justify-content:space-between">
       <div class="view-title">${esc(a.icon||"")} ${esc(a.name)}</div>
@@ -846,13 +869,23 @@ function viewArea(id){
         <div class="field"><label>Wichtigkeit</label>
           <select id="ntPrio"><option value="3">Hoch</option><option value="2" selected>Mittel</option><option value="1">Niedrig</option></select></div>
         <div class="field"><label>Projekt (optional)</label>
-          <input id="ntProj" list="projListArea" placeholder="Projekt wählen oder neu">
-          <datalist id="projListArea">${projectNames.map(p=>`<option value="${esc(p)}">`).join("")}</datalist></div>
+          <input id="ntProj" list="projListArea" placeholder="Projekt (auch aus anderen Tabs)">
+          <datalist id="projListArea">${projSuggest.map(p=>`<option value="${esc(p)}">`).join("")}</datalist></div>
         <div class="field"><label>Frist</label><input type="date" id="ntDue"></div>
         <div class="field"><label>Nachhaken am</label><input type="date" id="ntFollow"></div>
       </div>
       <button class="btn" id="ntAdd" style="width:100%">To-do hinzufügen</button>
     </div>`;
+
+  if(moveSug){
+    html+=`<div class="card" style="border-color:var(--warn)">
+      <div class="small">💡 „${esc(moveSug.t.title)}" hat das Projekt „${esc(moveSug.t.project)}" – dazu passt der Tab <b>${esc(moveSug.target.icon||"")} ${esc(moveSug.target.name)}</b>. Dorthin verschieben?</div>
+      <div class="row" style="gap:8px; margin-top:8px">
+        <button class="btn grow" id="moveYes">→ Zu „${esc(moveSug.target.name)}" verschieben</button>
+        <button class="btn sec" id="moveNo">Behalten</button>
+      </div>
+    </div>`;
+  }
 
   noProj.sort((x,y)=>urgency(y)-urgency(x));
   if(noProj.length) html+=noProj.map(t=>todoCard(t,false)).join("");
@@ -898,6 +931,10 @@ function viewArea(id){
     toast("Hinzugefügt"); render();
   };
   $("#ntTitle").onkeydown=e=>{ if(e.key==="Enter") $("#ntAdd").click(); };
+  if(moveSug){
+    $("#moveYes").onclick=()=>{ moveSug.t.areaId=moveSug.target.id; if(moveSug.clearProject) moveSug.t.project=""; save(); toast(`Verschoben zu „${moveSug.target.name}"`); render(); };
+    $("#moveNo").onclick=()=>{ S.ui.dismissedMove=(S.ui.dismissedMove||[]); S.ui.dismissedMove.push(moveSug.dk); save(); render(); };
+  }
   $("#areaEdit").onclick=()=>editArea(a);
   $("#areaDel").onclick=async ()=>{
     const msg = mine.length ? `„${a.name}" enthält ${mine.length} To-dos. Wirklich löschen?` : `Bereich „${a.name}" löschen?`;
@@ -1839,13 +1876,22 @@ function viewThoughts(){
 
   if(!list.length){ html+=`<div class="empty">Noch keine Gedanken. Schreib den ersten auf 💭</div>`; }
   list.forEach(t=>{
-    html+=`<div class="card" data-th="${t.id}">
-      <div style="white-space:pre-wrap; word-break:break-word">${esc(t.text)}</div>
-      <div class="row center" style="justify-content:space-between; gap:8px; margin-top:8px">
-        <span class="tiny muted">${new Date(t.ts).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}${t.tag?` · ${esc(t.tag)}`:""}</span>
-        <button class="btn ghost sm" data-thdel>✕</button>
-      </div>
-    </div>`;
+    if(S.ui.editThought===t.id){
+      html+=`<div class="card" data-th="${t.id}">
+        <div class="field"><textarea data-thedit style="min-height:80px">${esc(t.text)}</textarea></div>
+        <div class="row"><input data-thedittag class="grow" placeholder="Tag (optional)" value="${esc(t.tag||"")}">
+          <button class="btn sm" data-thsave>Speichern</button>
+          <button class="btn sec sm" data-thcancel>Abbr.</button></div>
+      </div>`;
+    } else {
+      html+=`<div class="card" data-th="${t.id}">
+        <div style="white-space:pre-wrap; word-break:break-word">${esc(t.text)}</div>
+        <div class="row center" style="justify-content:space-between; gap:8px; margin-top:8px">
+          <span class="tiny muted">${new Date(t.ts).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}${t.tag?` · ${esc(t.tag)}`:""}</span>
+          <div class="row"><button class="btn ghost sm" data-thedbtn>✏️</button><button class="btn ghost sm" data-thdel>✕</button></div>
+        </div>
+      </div>`;
+    }
   });
 
   const v=$("#view"); v.innerHTML=html;
@@ -1853,7 +1899,13 @@ function viewThoughts(){
     S.thoughts.unshift({id:uid(), text:tx, tag:$("#thTag").value.trim(), ts:Date.now()}); save(); render(); toast("Gedanke gespeichert 💭"); };
   $("#thAdd").onclick=add;
   v.querySelectorAll("[data-thtag]").forEach(b=>b.onclick=()=>{ S.ui.thoughtTag=b.dataset.thtag; save(); render(); });
-  v.querySelectorAll("[data-th]").forEach(card=>{ const id=card.dataset.th; card.querySelector("[data-thdel]").onclick=()=>{ S.thoughts=S.thoughts.filter(x=>x.id!==id); save(); render(); }; });
+  v.querySelectorAll("[data-th]").forEach(card=>{
+    const id=card.dataset.th; const t=S.thoughts.find(x=>x.id===id); if(!t) return;
+    const del=card.querySelector("[data-thdel]"); if(del) del.onclick=()=>{ S.thoughts=S.thoughts.filter(x=>x.id!==id); save(); render(); };
+    const edb=card.querySelector("[data-thedbtn]"); if(edb) edb.onclick=()=>{ S.ui.editThought=id; render(); };
+    const sv=card.querySelector("[data-thsave]"); if(sv) sv.onclick=()=>{ const nv=card.querySelector("[data-thedit]").value.trim(); if(!nv){ toast("Text fehlt"); return; } t.text=nv; t.tag=card.querySelector("[data-thedittag]").value.trim(); S.ui.editThought=null; save(); render(); toast("Gespeichert"); };
+    const cn=card.querySelector("[data-thcancel]"); if(cn) cn.onclick=()=>{ S.ui.editThought=null; render(); };
+  });
 }
 
 /* ============================ VIEW: LEBENSLEITFADEN ============================ */
