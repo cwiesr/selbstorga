@@ -205,7 +205,9 @@
       <span class="logo">✦</span>
       <span>Selbstorga <small id="brandDate"></small></span>
     </div>
-    <div class="row" style="gap:4px">
+    <div class="row" style="gap:2px">
+      <button class="btn ghost" id="undoBtn" title="Rückgängig" style="font-size:20px; padding:6px 8px">↶</button>
+      <button class="btn ghost" id="redoBtn" title="Wiederherstellen" style="font-size:20px; padding:6px 8px">↷</button>
       <button class="btn ghost" id="syncBtn" title="Geräte-Sync" style="font-size:20px; padding:6px 10px">⟳</button>
       <button class="btn ghost" id="settingsBtn" title="Einstellungen" style="font-size:20px; padding:6px 10px">⚙</button>
     </div>
@@ -362,10 +364,59 @@ function seed(){
 let S;
 try{ S = JSON.parse(localStorage.getItem(KEY)) || seed(); }catch(e){ S = seed(); }
 if(!S.areas) S = seed();
-let _suppressPush=false, _pushTimer=null;
+let _suppressPush=false, _pushTimer=null, _restoring=false;
+/* ---- Rückgängig / Wiederherstellen (Excel-artig, mehrere Schritte) ---- */
+const UNDO_KEY=()=>KEY+".undo", REDO_KEY=()=>KEY+".redo", UNDO_MAX=40;
+function _readStack(k){ try{ const a=JSON.parse(localStorage.getItem(k)||"[]"); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+function _writeStack(k,a){ try{ localStorage.setItem(k, JSON.stringify(a)); }catch(e){ // Platz schaffen und erneut versuchen
+    while(a.length>5){ a.shift(); try{ localStorage.setItem(k, JSON.stringify(a)); return; }catch(_){} } } }
+function pushUndo(prev, next){
+  if(prev==null || prev===next) return;      // nichts geändert
+  const st=_readStack(UNDO_KEY());
+  if(st.length && st[st.length-1]===prev) return; // Duplikat vermeiden
+  st.push(prev); while(st.length>UNDO_MAX) st.shift();
+  _writeStack(UNDO_KEY(), st);
+  _writeStack(REDO_KEY(), []);               // neue Aktion verwirft den Redo-Zweig
+  updateUndoBtns();
+}
+function _applySnapshot(json){
+  const keepSync=S.sync;
+  const obj=JSON.parse(json);
+  _restoring=true;
+  S=obj; S.sync=keepSync; ensureState(); S._rev=Date.now();
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
+  _restoring=false;
+  render(); updateUndoBtns();
+  if(S.sync && S.sync.enabled && S.sync.pass) syncPush().catch(()=>{});
+}
+function undoStep(){
+  const st=_readStack(UNDO_KEY());
+  if(!st.length){ toast("Nichts zum Rückgängigmachen"); return; }
+  const prev=st.pop(); _writeStack(UNDO_KEY(), st);
+  const rd=_readStack(REDO_KEY()); rd.push(localStorage.getItem(KEY)); while(rd.length>UNDO_MAX) rd.shift(); _writeStack(REDO_KEY(), rd);
+  _applySnapshot(prev);
+  toast("Rückgängig gemacht ↶");
+}
+function redoStep(){
+  const rd=_readStack(REDO_KEY());
+  if(!rd.length){ toast("Nichts zum Wiederherstellen"); return; }
+  const next=rd.pop(); _writeStack(REDO_KEY(), rd);
+  const st=_readStack(UNDO_KEY()); st.push(localStorage.getItem(KEY)); while(st.length>UNDO_MAX) st.shift(); _writeStack(UNDO_KEY(), st);
+  _applySnapshot(next);
+  toast("Wiederhergestellt ↷");
+}
+function updateUndoBtns(){
+  const u=document.getElementById("undoBtn"), r=document.getElementById("redoBtn");
+  const nu=_readStack(UNDO_KEY()).length, nr=_readStack(REDO_KEY()).length;
+  if(u){ u.disabled=!nu; u.style.opacity=nu?"1":".35"; u.title=nu?("Rückgängig ("+nu+" Schritte möglich)"):"Nichts zum Rückgängigmachen"; }
+  if(r){ r.disabled=!nr; r.style.opacity=nr?"1":".35"; r.title=nr?"Wiederherstellen":"Nichts zum Wiederherstellen"; }
+}
 function save(){
   if(!_suppressPush) S._rev=Date.now();
-  try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast("Speichern fehlgeschlagen"); }
+  const _serialized=JSON.stringify(S);
+  // Undo-Verlauf: den vorherigen Stand sichern, bevor er überschrieben wird (nur echte Nutzeraktionen)
+  if(!_suppressPush && !_restoring){ try{ pushUndo(localStorage.getItem(KEY), _serialized); }catch(e){} }
+  try{ localStorage.setItem(KEY, _serialized); }catch(e){ toast("Speichern fehlgeschlagen"); }
   try{ // automatische lokale Sicherung des bisher größten Stands
     const w=stateWeight(S);
     if(w>0){
@@ -2230,6 +2281,9 @@ $("#syncBtn").onclick=()=>{ $("#syncSheet").classList.add("open"); const p=$("#s
   const ri=$("#restoreInfo"); if(ri){ const sw=+(localStorage.getItem(KEY+".safeW")||0); ri.textContent = sw>0 ? `Lokale Sicherung: ${sw} Einträge gespeichert.` : "Noch keine lokale Sicherung."; }
   const ps=$("#pinStatus"); if(ps){ ps.textContent=pinIsSet()?"PIN aktiv ✓":"Kein PIN gesetzt"; ps.style.color=pinIsSet()?"var(--good)":"var(--muted)"; } };
 function fillPinStatus(){ const ps=$("#pinStatus"); if(ps){ ps.textContent=pinIsSet()?"PIN aktiv ✓":"Kein PIN gesetzt"; ps.style.color=pinIsSet()?"var(--good)":"var(--muted)"; } }
+$("#undoBtn").onclick=undoStep;
+$("#redoBtn").onclick=redoStep;
+updateUndoBtns();
 $("#settingsBtn").onclick=()=>{ $("#settingsSheet").classList.add("open"); fillPinStatus(); };
 $("#settingsClose").onclick=()=>$("#settingsSheet").classList.remove("open");
 $("#settingsSheet").onclick=e=>{ if(e.target.id==="settingsSheet") $("#settingsSheet").classList.remove("open"); };
@@ -2257,6 +2311,33 @@ if(S.sync&&S.sync.enabled&&S.sync.pass){ (async()=>{ try{ const pr=await syncPul
 if(!SPECIALS_LEFT.some(s=>s.k===S.ui.active) && !SPECIALS_RIGHT.some(s=>s.k===S.ui.active)
    && !(S.ui.active||"").startsWith("area:")) S.ui.active="overview";
 render();
+
+/* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
+/* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
+const APP_VERSION="2026-08-27.4";
+let _updating=false;
+async function checkForUpdate(){
+  if(_updating) return;
+  try{
+    const r=await fetch("./version.json?ts="+Date.now(), {cache:"no-store"});
+    if(!r.ok) return;
+    const j=await r.json();
+    if(j && j.v && j.v!==APP_VERSION){
+      _updating=true;
+      toast("Neue Version wird geladen …");
+      try{ if(window.caches){ const ks=await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); } }catch(e){}
+      try{ if(navigator.serviceWorker){ const regs=await navigator.serviceWorker.getRegistrations(); regs.forEach(rg=>rg.update()); } }catch(e){}
+      setTimeout(()=>{ try{ location.reload(); }catch(e){ location.href=location.pathname+"?u="+Date.now(); } }, 800);
+    }
+  }catch(e){}
+}
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{ navigator.serviceWorker.register("./sw.js").catch(()=>{}); });
+}
+checkForUpdate();
+if(document.addEventListener) document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkForUpdate(); });
+if(window.addEventListener) window.addEventListener("focus", checkForUpdate);
+setInterval(()=>{ if(!document.hidden) checkForUpdate(); }, 5*60000);
 </script>
 </body>
 </html>
