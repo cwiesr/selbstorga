@@ -72,6 +72,16 @@
 
   .todo{background:var(--panel); border:1px solid var(--border); border-radius:12px; margin-bottom:10px; overflow:hidden}
   .todo.done{opacity:.55}
+  /* Spalten-/Board-Ansicht */
+  .board{display:flex; gap:10px; overflow-x:auto; padding:2px 2px 10px; -webkit-overflow-scrolling:touch}
+  .bcol{flex:0 0 var(--colw,250px); width:var(--colw,250px); background:var(--panel2); border:1px solid var(--border); border-radius:12px; display:flex; flex-direction:column; align-self:flex-start}
+  .bcol-head{font-weight:700; font-size:14px; padding:10px 12px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--panel2); border-radius:12px 12px 0 0; z-index:1}
+  .bcol-body{padding:8px; min-height:48px}
+  .bcol-body .todo{margin-bottom:8px}
+  .bcol.dragover{outline:2px dashed var(--accent); outline-offset:-2px}
+  .todo[data-board]{cursor:grab}
+  .todo[data-board].dragging{opacity:.45}
+  .drag-h{flex:0 0 auto; color:var(--muted2); cursor:grab; font-size:16px; line-height:1; padding:2px 2px 0; user-select:none}
   .todo-head{display:flex; align-items:flex-start; gap:10px; padding:12px}
   .check{flex:0 0 auto; width:24px;height:24px;border-radius:7px;border:2px solid var(--muted2);
     background:transparent; margin-top:1px; display:grid; place-items:center; color:#fff; font-size:15px}
@@ -613,7 +623,7 @@ function addTodo(o){
   const t={id:uid(), areaId:o.areaId, title:o.title, notes:o.notes||"", project:o.project||"",
     priority:o.priority||2, dueDate:o.dueDate||null, followUpDate:o.followUpDate||null,
     done:false, doneAt:null, createdAt:todayStr(), open:false, milestones:[], updatedAt:Date.now(),
-    daily:!!o.daily, dailyUntil:o.dailyUntil||null, dailyLog:{}};
+    daily:!!o.daily, dailyUntil:o.dailyUntil||null, dailyLog:{}, delegated:!!o.delegated};
   S.todos.unshift(t); save(); return t;
 }
 /* --- Tägliche To-dos: erledigt-Status gilt pro Tag, ggf. befristet --- */
@@ -719,7 +729,7 @@ function render(){
 }
 
 /* ============================ TODO CARD (shared) ============================ */
-function todoCard(t, showArea){
+function todoCard(t, showArea, board){
   const a=areaById(t.areaId);
   const du=daysUntil(t.dueDate), fu=daysUntil(t.followUpDate);
   const dueCls = du===null?"":(du<0?"due-over":(du<=2?"due-soon":""));
@@ -735,8 +745,9 @@ function todoCard(t, showArea){
   if(t.project) badges.push(`<span class="badge">📂 ${esc(t.project)}</span>`);
 
   const dn=todoDone(t);
-  return `<div class="todo ${dn?"done":""} ${t.open?"open":""}" data-id="${t.id}">
+  return `<div class="todo ${dn?"done":""} ${t.open?"open":""}" data-id="${t.id}" ${board?'draggable="true" data-board="1"':''}>
     <div class="todo-head">
+      ${board?`<span class="drag-h" data-act="movecol" title="In andere Spalte verschieben">⠿</span>`:''}
       <button class="check ${dn?"on":""}" data-act="toggle">${dn?"✓":""}</button>
       <div class="todo-main" data-act="open">
         <div class="todo-title">${esc(t.title)}</div>
@@ -797,6 +808,7 @@ function bindTodos(root){
       btn.addEventListener("click", ev=>{
         const act=btn.dataset.act;
         if(act==="toggle"){ ev.stopPropagation(); toggleTodo(id); return; }
+        if(act==="movecol"){ ev.stopPropagation(); chooseColumn(id); return; }
         if(act==="open"){ t.open=!t.open; save(); render(); return; }
         if(act==="del"){ uiConfirm("To-do löschen?","Löschen").then(ok=>{ if(ok) delTodo(id); }); return; }
         if(act==="ms-add"){
@@ -819,6 +831,75 @@ function bindTodos(root){
         t[f]=v; t.updatedAt=Date.now(); save();
         if(f==="areaId"||f==="project"||f==="priority"||f==="dueDate"||f==="title"||f==="dailyUntil") render();
       });
+    });
+  });
+}
+
+/* ---- Spalten-/Board-Ansicht (Kanban nach Wichtigkeit + Delegieren) ---- */
+const BOARD_COLS=[
+  {key:"p3",  label:"🔴 Hoch"},
+  {key:"p2",  label:"🟡 Mittel"},
+  {key:"p1",  label:"🟢 Niedrig"},
+  {key:"del", label:"🤝 Delegieren"},
+];
+function colOf(t){ if(t.delegated) return "del"; return "p"+(t.priority||2); }
+function moveTodoToColumn(id, key){
+  const t=S.todos.find(x=>x.id===id); if(!t) return;
+  if(colOf(t)===key) return;
+  if(key==="del"){ t.delegated=true; }
+  else { t.delegated=false; t.priority = key==="p3"?3:key==="p2"?2:1; }
+  t.updatedAt=Date.now(); save(); render();
+  toast("Verschoben → "+ (BOARD_COLS.find(c=>c.key===key)||{}).label);
+}
+function chooseColumn(id){
+  const t=S.todos.find(x=>x.id===id); if(!t) return;
+  $("#modalTitle").textContent="Verschieben nach …";
+  const cur=colOf(t);
+  $("#modalBody").innerHTML=`<div style="display:flex; flex-direction:column; gap:8px">
+    ${BOARD_COLS.map(c=>`<button class="btn ${c.key===cur?'':'sec'}" data-mc="${c.key}">${c.label}${c.key===cur?' ✓':''}</button>`).join("")}
+  </div>`;
+  const m=$("#modal"); m.classList.add("open");
+  $("#modalOk").textContent="Schließen";
+  const close=()=>{ closeModal(); $("#modalOk").textContent="OK"; };
+  m.querySelectorAll("[data-mc]").forEach(b=>b.onclick=()=>{ moveTodoToColumn(id,b.dataset.mc); close(); });
+  $("#modalOk").onclick=close; $("#modalCancel").onclick=close; $("#modalX").onclick=close;
+  m.onclick=e=>{ if(e.target.id==="modal") close(); };
+}
+function areaBoard(mine){
+  const openMine=mine.filter(t=>todoOpen(t));
+  const w=S.ui.boardColW||250;
+  let h=`<div class="board" style="--colw:${w}px">`;
+  BOARD_COLS.forEach(c=>{
+    const items=openMine.filter(t=>colOf(t)===c.key).sort((x,y)=>urgency(y)-urgency(x));
+    h+=`<div class="bcol" data-col="${c.key}">
+      <div class="bcol-head">${c.label} <span class="tiny muted">${items.length}</span></div>
+      <div class="bcol-body">${items.map(t=>todoCard(t,false,true)).join("")||`<div class="tiny muted" style="padding:10px 4px">Hierher ziehen …</div>`}</div>
+    </div>`;
+  });
+  h+=`</div>`;
+  const doneMine=mine.filter(t=>todoDone(t));
+  if(doneMine.length) h+=`<div class="proj-head" style="margin-top:16px">✓ Erledigt (${doneMine.length})</div>`+doneMine.slice(0,20).map(t=>todoCard(t,false)).join("");
+  return h;
+}
+function bindBoard(root){
+  let dragId=null;
+  root.querySelectorAll('.todo[data-board]').forEach(el=>{
+    el.addEventListener("dragstart", e=>{
+      const tag=(e.target&&e.target.tagName||"").toLowerCase();
+      if(el.classList.contains("open") || ["input","textarea","select","option"].includes(tag)){ e.preventDefault(); return; }
+      dragId=el.dataset.id;
+      try{ e.dataTransfer.setData("text/plain", dragId); e.dataTransfer.effectAllowed="move"; }catch(_){}
+      el.classList.add("dragging");
+    });
+    el.addEventListener("dragend", ()=>{ el.classList.remove("dragging"); dragId=null; root.querySelectorAll(".bcol.dragover").forEach(c=>c.classList.remove("dragover")); });
+  });
+  root.querySelectorAll(".bcol").forEach(col=>{
+    col.addEventListener("dragover", e=>{ e.preventDefault(); try{ e.dataTransfer.dropEffect="move"; }catch(_){} col.classList.add("dragover"); });
+    col.addEventListener("dragleave", e=>{ if(e.target===col) col.classList.remove("dragover"); });
+    col.addEventListener("drop", e=>{
+      e.preventDefault(); col.classList.remove("dragover");
+      let id=dragId; try{ id=e.dataTransfer.getData("text/plain")||dragId; }catch(_){}
+      if(id) moveTodoToColumn(id, col.dataset.col);
     });
   });
 }
@@ -940,28 +1021,37 @@ function viewArea(id){
     if(target){ moveSug={t, target, clearProject, dk}; break; }
   }
 
-  let html=`<div class="row center" style="justify-content:space-between">
+  const board=!!S.ui.boardMode;
+  const addCollapsed=!!S.ui.addCollapsed;
+  let html=`<div class="row center" style="justify-content:space-between; flex-wrap:wrap; gap:6px">
       <div class="view-title">${esc(a.icon||"")} ${esc(a.name)}</div>
-      <div class="row">
+      <div class="row" style="gap:4px; flex-wrap:wrap">
+        <button class="btn ghost sm" id="boardToggle" title="Ansicht wechseln">${board?"☰ Liste":"▦ Spalten"}</button>
+        ${board?`<button class="btn ghost sm" id="colNarrow" title="Spalten schmaler">◄</button><button class="btn ghost sm" id="colWide" title="Spalten breiter">►</button>`:""}
         <button class="btn ghost sm" id="areaEdit">✏️</button>
         <button class="btn ghost sm" id="areaDel">🗑</button>
       </div>
     </div>
-    <div class="view-sub">${openT.length} offen · ${doneT.length} erledigt</div>
+    <div class="view-sub">${openT.length} offen · ${doneT.length} erledigt${board?" · Spalten-Ansicht (ziehen oder ⠿ zum Verschieben)":""}</div>
 
     <div class="card">
-      <h3>Neues To-do</h3>
-      <div class="field"><input id="ntTitle" placeholder="Titel…" autocomplete="off"></div>
-      <div class="grid2">
-        <div class="field"><label>Wichtigkeit</label>
-          <select id="ntPrio"><option value="3">Hoch</option><option value="2" selected>Mittel</option><option value="1">Niedrig</option></select></div>
-        <div class="field"><label>Projekt (optional)</label>
-          <input id="ntProj" list="projListArea" placeholder="Projekt (auch aus anderen Tabs)">
-          <datalist id="projListArea">${projSuggest.map(p=>`<option value="${esc(p)}">`).join("")}</datalist></div>
-        <div class="field"><label>Frist</label><input type="date" id="ntDue"></div>
-        <div class="field"><label>Nachhaken am</label><input type="date" id="ntFollow"></div>
+      <div class="row center" style="justify-content:space-between; gap:8px; cursor:pointer" id="ntHead">
+        <h3 style="margin:0">Neues To-do</h3>
+        <button class="btn ghost sm" id="ntToggle">${addCollapsed?"▾ ausklappen":"▴ einklappen"}</button>
       </div>
-      <button class="btn" id="ntAdd" style="width:100%">To-do hinzufügen</button>
+      <div id="ntBody" style="${addCollapsed?"display:none":"margin-top:10px"}">
+        <div class="field"><input id="ntTitle" placeholder="Titel…" autocomplete="off"></div>
+        <div class="grid2">
+          <div class="field"><label>Wichtigkeit</label>
+            <select id="ntPrio"><option value="3">Hoch</option><option value="2" selected>Mittel</option><option value="1">Niedrig</option></select></div>
+          <div class="field"><label>Projekt (optional)</label>
+            <input id="ntProj" list="projListArea" placeholder="Projekt (auch aus anderen Tabs)">
+            <datalist id="projListArea">${projSuggest.map(p=>`<option value="${esc(p)}">`).join("")}</datalist></div>
+          <div class="field"><label>Frist</label><input type="date" id="ntDue"></div>
+          <div class="field"><label>Nachhaken am</label><input type="date" id="ntFollow"></div>
+        </div>
+        <button class="btn" id="ntAdd" style="width:100%">To-do hinzufügen</button>
+      </div>
     </div>`;
 
   if(moveSug){
@@ -974,6 +1064,9 @@ function viewArea(id){
     </div>`;
   }
 
+  if(board){
+    html+=areaBoard(mine);
+  } else {
   noProj.sort((x,y)=>urgency(y)-urgency(x));
   if(noProj.length) html+=noProj.map(t=>todoCard(t,false)).join("");
 
@@ -1008,6 +1101,7 @@ function viewArea(id){
     html+=`<div class="proj-head">✓ Erledigt (${doneNoProj.length})</div>`;
     html+=doneNoProj.slice(0,20).map(t=>todoCard(t,false)).join("");
   }
+  } // Ende Listen-Ansicht
 
   const v=$("#view"); v.innerHTML=html;
   // add todo
@@ -1035,7 +1129,14 @@ function viewArea(id){
     const key=b.dataset.projtoggle; S.ui.collapsedProjects=S.ui.collapsedProjects||{};
     S.ui.collapsedProjects[key]=!S.ui.collapsedProjects[key]; save(); render();
   });
+  // Ansicht/Spalten-Steuerung
+  const toggleAdd=()=>{ S.ui.addCollapsed=!S.ui.addCollapsed; save(); render(); };
+  const nh=$("#ntHead"); if(nh) nh.onclick=(e)=>{ if(e.target.closest("input,select,textarea")) return; toggleAdd(); };
+  $("#boardToggle").onclick=()=>{ S.ui.boardMode=!S.ui.boardMode; save(); render(); };
+  const cn=$("#colNarrow"); if(cn) cn.onclick=()=>{ S.ui.boardColW=Math.max(190,(S.ui.boardColW||250)-30); save(); render(); };
+  const cw=$("#colWide"); if(cw) cw.onclick=()=>{ S.ui.boardColW=Math.min(460,(S.ui.boardColW||250)+30); save(); render(); };
   bindTodos(v);
+  if(board) bindBoard(v);
 }
 async function editArea(a){
   const r=await uiPrompt("Bereich bearbeiten",[
@@ -2314,7 +2415,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.4";
+const APP_VERSION="2026-08-27.5";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
