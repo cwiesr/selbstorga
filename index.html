@@ -86,6 +86,7 @@
   .donerow{display:flex; align-items:center; gap:10px; padding:9px 10px; border:1px solid var(--border); border-radius:10px; background:var(--panel); margin-bottom:6px}
   .donerow .donecheck{flex:0 0 auto; width:20px;height:20px;border-radius:6px; background:var(--good); color:#fff; display:grid; place-items:center; font-size:12px}
   .donerow .donetitle{font-weight:600; text-decoration:line-through; opacity:.75; word-break:break-word}
+  .donelink{color:var(--good); text-decoration:underline; text-underline-offset:2px; cursor:pointer; font-weight:600}
   .todo[data-board]{cursor:grab}
   .todo[data-board].dragging{opacity:.45}
   .drag-h{flex:0 0 auto; color:var(--muted2); cursor:grab; font-size:16px; line-height:1; padding:2px 2px 0; user-select:none}
@@ -927,7 +928,7 @@ function doneRow(t, showArea){
 function donePanel(doneList, ctxKey, showArea){
   if(!doneList.length) return "";
   const open=!!(S.ui.doneOpen||{})[ctxKey];
-  let h=`<button class="proj-head" data-donetoggle="${esc(ctxKey)}" style="display:flex; align-items:center; gap:8px; width:100%; text-align:left; background:none; border:none; color:var(--text); cursor:pointer; margin-top:16px; padding-left:0">
+  let h=`<button class="proj-head" id="donePanelAnchor" data-donetoggle="${esc(ctxKey)}" style="display:flex; align-items:center; gap:8px; width:100%; text-align:left; background:none; border:none; color:var(--text); cursor:pointer; margin-top:16px; padding-left:0; scroll-margin-top:120px">
       <span class="muted">${open?"▼":"▶"}</span> ✓ Erledigt (${doneList.length})
     </button>`;
   if(open){
@@ -949,9 +950,14 @@ function donePanel(doneList, ctxKey, showArea){
   }
   return h;
 }
+function jumpToDone(ctxKey){
+  S.ui.doneOpen=S.ui.doneOpen||{}; S.ui.doneOpen[ctxKey]=true; save(); render();
+  setTimeout(()=>{ const el=document.getElementById("donePanelAnchor"); if(el) el.scrollIntoView({behavior:"smooth", block:"start"}); }, 60);
+}
 function bindDone(root){
   root.querySelectorAll("[data-restore]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); restoreTodo(b.dataset.restore); });
   root.querySelectorAll("[data-donetoggle]").forEach(b=>b.onclick=()=>{ const k=b.dataset.donetoggle; S.ui.doneOpen=S.ui.doneOpen||{}; S.ui.doneOpen[k]=!S.ui.doneOpen[k]; save(); render(); });
+  root.querySelectorAll("[data-jumpdone]").forEach(b=>b.onclick=(e)=>{ e.preventDefault(); jumpToDone(b.dataset.jumpdone); });
 }
 function bindBoard(root){
   root.querySelectorAll("[data-cw]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); setColWidth(b.dataset.cw, (+b.dataset.dir)*COL_STEP); });
@@ -995,7 +1001,7 @@ function viewOverview(){
         <button class="btn ghost sm" id="ovBoardToggle" title="Ansicht wechseln">${ovBoard?"☰ Liste":"▦ Spalten"}</button>
       </div>
     </div>
-    <div class="view-sub">${WD[new Date().getDay()]}, ${new Date().toLocaleDateString("de-DE")} · ${open.length} offen · heute ${doneToday} erledigt ✓</div>
+    <div class="view-sub">${WD[new Date().getDay()]}, ${new Date().toLocaleDateString("de-DE")} · ${open.length} offen · ${(S.todos.filter(t=>todoDone(t)).length)?`<span class="donelink" data-jumpdone="overview">heute ${doneToday} erledigt ↓</span>`:`heute ${doneToday} erledigt`} ✓</div>
 
     <div class="card" style="border-color:var(--accent-dim)">
       <div class="row" style="justify-content:space-between; align-items:flex-start; gap:8px">
@@ -1117,7 +1123,7 @@ function viewArea(id){
         <button class="btn ghost sm" id="areaDel">🗑</button>
       </div>
     </div>
-    <div class="view-sub">${openT.length} offen · ${doneT.length} erledigt${board?" · Spalten-Ansicht (ziehen oder ⠿ zum Verschieben)":""}</div>
+    <div class="view-sub">${openT.length} offen · ${doneT.length?`<span class="donelink" data-jumpdone="area:${id}">${doneT.length} erledigt ↓</span>`:"0 erledigt"}${board?" · Spalten-Ansicht (ziehen oder ⠿ zum Verschieben)":""}</div>
 
     <div class="card">
       <div class="row center" style="justify-content:space-between; gap:8px; cursor:pointer" id="ntHead">
@@ -2495,7 +2501,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.7";
+const APP_VERSION="2026-08-27.8";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
