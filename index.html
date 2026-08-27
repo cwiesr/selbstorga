@@ -214,6 +214,21 @@
   .lock-title{font-weight:750; font-size:20px; margin-top:8px}
   .lock-sub{color:var(--muted); margin:2px 0 16px}
   .lock input{text-align:center; letter-spacing:8px; font-size:22px}
+  /* globale Suche */
+  .searchwrap{position:relative; margin:8px 0 2px}
+  .searchwrap input{width:100%; box-sizing:border-box}
+  .search-clear{position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer; display:none}
+  .search-results{position:absolute; top:100%; left:0; right:0; z-index:45; background:var(--panel); border:1px solid var(--border);
+    border-radius:12px; margin-top:6px; max-height:64vh; overflow:auto; box-shadow:0 12px 30px rgba(0,0,0,.45); display:none}
+  .search-results.on{display:block}
+  .sres{display:flex; gap:10px; align-items:flex-start; padding:11px 12px; border-bottom:1px solid var(--border); cursor:pointer}
+  .sres:last-child{border-bottom:none}
+  .sres:hover,.sres:active{background:var(--panel2)}
+  .sres .sicon{flex:0 0 auto; font-size:15px; margin-top:1px}
+  .sres .stitle{font-weight:600; word-break:break-word}
+  .sres .stitle mark{background:var(--warn); color:#1a1200; border-radius:3px; padding:0 2px}
+  .sres-empty{padding:14px 12px; color:var(--muted); font-size:14px}
+  .sres-head{padding:8px 12px; font-size:12px; font-weight:700; letter-spacing:.3px; color:var(--muted); background:var(--panel2); position:sticky; top:0}
 </style>
 </head>
 <body>
@@ -229,6 +244,11 @@
       <button class="btn ghost" id="syncBtn" title="Geräte-Sync" style="font-size:20px; padding:6px 10px">⟳</button>
       <button class="btn ghost" id="settingsBtn" title="Einstellungen" style="font-size:20px; padding:6px 10px">⚙</button>
     </div>
+  </div>
+  <div class="searchwrap">
+    <input id="globalSearch" placeholder="🔍 To-do in allen Tabs suchen…" autocomplete="off" spellcheck="false">
+    <button class="search-clear" id="searchClear" title="Leeren">✕</button>
+    <div class="search-results" id="searchResults"></div>
   </div>
   <nav class="tabbar" id="tabbar"></nav>
 </header>
@@ -958,6 +978,77 @@ function bindDone(root){
   root.querySelectorAll("[data-restore]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); restoreTodo(b.dataset.restore); });
   root.querySelectorAll("[data-donetoggle]").forEach(b=>b.onclick=()=>{ const k=b.dataset.donetoggle; S.ui.doneOpen=S.ui.doneOpen||{}; S.ui.doneOpen[k]=!S.ui.doneOpen[k]; save(); render(); });
   root.querySelectorAll("[data-jumpdone]").forEach(b=>b.onclick=(e)=>{ e.preventDefault(); jumpToDone(b.dataset.jumpdone); });
+}
+
+/* ---- globale Suche: ist ein To-do schon in einem Tab erfasst? ---- */
+function searchTodos(q){
+  const words=q.toLowerCase().split(/\s+/).filter(Boolean);
+  if(!words.length) return [];
+  return S.todos.filter(t=>{
+    const hay=((t.title||"")+" "+(t.notes||"")+" "+(t.project||"")).toLowerCase();
+    return words.every(w=>hay.includes(w));
+  });
+}
+function _hl(text, q){
+  const words=[...new Set(q.toLowerCase().split(/\s+/).filter(Boolean))].sort((a,b)=>b.length-a.length);
+  let out=esc(text);
+  words.forEach(w=>{
+    const re=new RegExp("("+w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","ig");
+    out=out.replace(re,"<mark>$1</mark>");
+  });
+  return out;
+}
+function renderSearch(q){
+  const box=document.getElementById("searchResults");
+  const clr=document.getElementById("searchClear");
+  if(!box) return;
+  if(clr) clr.style.display=q?"block":"none";
+  q=(q||"").trim();
+  if(!q){ box.classList.remove("on"); box.innerHTML=""; return; }
+  const matches=searchTodos(q);
+  box.classList.add("on");
+  if(!matches.length){
+    box.innerHTML=`<div class="sres-empty">Kein passendes To-do gefunden – „${esc(q)}" ist in keinem Tab erfasst. Du kannst es also neu anlegen.</div>`;
+    return;
+  }
+  const openM=matches.filter(t=>todoOpen(t)), doneM=matches.filter(t=>todoDone(t));
+  const row=(t)=>{
+    const a=areaById(t.areaId);
+    const done=todoDone(t);
+    const icon=done?"✅":(t.delegated?"🤝":"🟢");
+    const where=a?`${esc(a.icon||"")} ${esc(a.name)}`:"—";
+    const meta=[where];
+    if(t.project) meta.push("📂 "+esc(t.project));
+    if(t.dueDate) meta.push("⏳ "+fmtDate(t.dueDate));
+    meta.push(done?"erledigt":"offen");
+    return `<div class="sres" data-open="${t.id}">
+      <span class="sicon">${icon}</span>
+      <div style="min-width:0">
+        <div class="stitle">${_hl(t.title||"", q)}</div>
+        <div class="tiny muted" style="margin-top:2px">${meta.join(" · ")}</div>
+      </div>
+    </div>`;
+  };
+  let h=`<div class="sres-head">${matches.length} Treffer${openM.length?` · ${openM.length} offen`:""}${doneM.length?` · ${doneM.length} erledigt`:""}</div>`;
+  h+=openM.map(row).join("");
+  if(doneM.length){ h+=`<div class="sres-head">Erledigt</div>`+doneM.map(row).join(""); }
+  box.innerHTML=h;
+  box.querySelectorAll("[data-open]").forEach(el=>el.onclick=()=>openTodoInTab(el.dataset.open));
+}
+function hideSearch(){
+  const box=document.getElementById("searchResults"); if(box){ box.classList.remove("on"); }
+}
+function clearSearch(){
+  const inp=document.getElementById("globalSearch"); if(inp) inp.value="";
+  renderSearch("");
+}
+function openTodoInTab(id){
+  const t=S.todos.find(x=>x.id===id); if(!t){ toast("To-do nicht mehr vorhanden"); return; }
+  t.open=true; save();
+  clearSearch();
+  const inp=document.getElementById("globalSearch"); if(inp) inp.blur();
+  go("area:"+t.areaId);
+  setTimeout(()=>{ const el=document.querySelector('.todo[data-id="'+id+'"]'); if(el) el.scrollIntoView({behavior:"smooth", block:"center"}); }, 90);
 }
 function bindBoard(root){
   root.querySelectorAll("[data-cw]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); setColWidth(b.dataset.cw, (+b.dataset.dir)*COL_STEP); });
@@ -2471,6 +2562,14 @@ function fillPinStatus(){ const ps=$("#pinStatus"); if(ps){ ps.textContent=pinIs
 $("#undoBtn").onclick=undoStep;
 $("#redoBtn").onclick=redoStep;
 updateUndoBtns();
+(function initSearch(){
+  const inp=$("#globalSearch"); if(!inp) return;
+  inp.addEventListener("input", ()=>renderSearch(inp.value));
+  inp.addEventListener("focus", ()=>{ if(inp.value.trim()) renderSearch(inp.value); });
+  inp.addEventListener("keydown", (e)=>{ if(e.key==="Escape"){ clearSearch(); inp.blur(); } });
+  const clr=$("#searchClear"); if(clr) clr.onclick=()=>{ clearSearch(); inp.focus(); };
+  document.addEventListener("click",(e)=>{ if(!e.target.closest(".searchwrap")) hideSearch(); });
+})();
 $("#settingsBtn").onclick=()=>{ $("#settingsSheet").classList.add("open"); fillPinStatus(); };
 $("#settingsClose").onclick=()=>$("#settingsSheet").classList.remove("open");
 $("#settingsSheet").onclick=e=>{ if(e.target.id==="settingsSheet") $("#settingsSheet").classList.remove("open"); };
@@ -2501,7 +2600,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.8";
+const APP_VERSION="2026-08-27.9";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
