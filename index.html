@@ -205,7 +205,10 @@
       <span class="logo">✦</span>
       <span>Selbstorga <small id="brandDate"></small></span>
     </div>
-    <button class="btn ghost" id="syncBtn" title="Geräte-Sync" style="font-size:20px; padding:6px 10px">⟳</button>
+    <div class="row" style="gap:4px">
+      <button class="btn ghost" id="syncBtn" title="Geräte-Sync" style="font-size:20px; padding:6px 10px">⟳</button>
+      <button class="btn ghost" id="settingsBtn" title="Einstellungen" style="font-size:20px; padding:6px 10px">⚙</button>
+    </div>
   </div>
   <nav class="tabbar" id="tabbar"></nav>
 </header>
@@ -269,18 +272,24 @@
         <div id="srvHistList"></div>
       </div>
 
-      <div style="margin-top:18px; border-top:1px solid var(--border); padding-top:14px">
-        <div class="small" style="font-weight:600; margin-bottom:8px">PIN-Schutz</div>
-        <div class="tiny muted" style="margin-bottom:8px">Sperrt die App mit einer 6–8-stelligen PIN. Nach 3 Std. wird sie erneut abgefragt. Der PIN wird nur als Hash gespeichert.</div>
-        <div id="pinStatus" class="tiny" style="margin-bottom:8px"></div>
-        <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Neuer PIN (6–8 Ziffern)" autocomplete="off">
-        <div class="row" style="gap:8px; margin-top:8px">
-          <button class="btn grow" id="pinSet">PIN setzen</button>
-          <button class="btn danger" id="pinClear">Entfernen</button>
-        </div>
-      </div>
-
       <div class="tiny muted" style="margin-top:12px">Sync läuft nur in der echten Web-Version (z.B. Vercel), nicht in der Chat-Vorschau. Die Passphrase wird lokal auf diesem Gerät gespeichert, damit der Abgleich automatisch passiert.</div>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="settingsSheet">
+  <div class="sheet-inner" style="border-radius:18px; left:14px; right:14px; bottom:auto; top:50%; transform:translateY(-50%); max-width:440px; margin:0 auto; max-height:90vh; overflow:auto">
+    <div class="sheet-head"><b>⚙ Einstellungen</b><button class="btn ghost" id="settingsClose">✕</button></div>
+    <div style="padding:14px">
+      <div class="small" style="font-weight:600; margin-bottom:8px">🔒 PIN-Schutz</div>
+      <div class="tiny muted" style="margin-bottom:8px">Sperrt die App mit einer 6–8-stelligen PIN. Nach 3 Std. wird sie erneut abgefragt. Der PIN wird nur als Hash gespeichert (nie im Klartext).</div>
+      <div id="pinStatus" class="tiny" style="margin-bottom:8px"></div>
+      <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Neuer PIN (6–8 Ziffern)" autocomplete="off">
+      <div class="row" style="gap:8px; margin-top:8px">
+        <button class="btn grow" id="pinSet">PIN setzen</button>
+        <button class="btn danger" id="pinClear">Entfernen</button>
+      </div>
+      <div class="tiny muted" style="margin-top:14px">Weitere Einstellungen folgen hier.</div>
     </div>
   </div>
 </div>
@@ -552,11 +561,25 @@ function tombstone(coll, id){ S.deleted=S.deleted||{}; (S.deleted[coll]=S.delete
 function addTodo(o){
   const t={id:uid(), areaId:o.areaId, title:o.title, notes:o.notes||"", project:o.project||"",
     priority:o.priority||2, dueDate:o.dueDate||null, followUpDate:o.followUpDate||null,
-    done:false, doneAt:null, createdAt:todayStr(), open:false, milestones:[], updatedAt:Date.now()};
+    done:false, doneAt:null, createdAt:todayStr(), open:false, milestones:[], updatedAt:Date.now(),
+    daily:!!o.daily, dailyUntil:o.dailyUntil||null, dailyLog:{}};
   S.todos.unshift(t); save(); return t;
 }
+/* --- Tägliche To-dos: erledigt-Status gilt pro Tag, ggf. befristet --- */
+function dailyDoneToday(t){ return !!(t.dailyLog && t.dailyLog[todayStr()]); }
+function dailyExpired(t){ return !!(t.daily && t.dailyUntil && todayStr()>t.dailyUntil); }
+function todoDone(t){ return t.daily ? (dailyExpired(t) || dailyDoneToday(t)) : !!t.done; }   // "erledigt" für Ansichten/Listen
+function todoOpen(t){ return !todoDone(t); }
+function todoDoneToday(t){ return t.daily ? dailyDoneToday(t) : (!!t.done && t.doneAt===todayStr()); }  // heute abgehakt?
 function toggleTodo(id){
   const t=S.todos.find(x=>x.id===id); if(!t) return;
+  if(t.daily){
+    t.dailyLog=t.dailyLog||{}; const d=todayStr();
+    if(t.dailyLog[d]) delete t.dailyLog[d]; else t.dailyLog[d]=true;
+    t.updatedAt=Date.now(); save(); render();
+    if(t.dailyLog[d]) toast("Heute erledigt ✓");
+    return;
+  }
   t.done=!t.done; t.doneAt=t.done?todayStr():null; t.updatedAt=Date.now(); save(); render();
   if(t.done) toast("Erledigt ✓");
 }
@@ -656,12 +679,14 @@ function todoCard(t, showArea){
   if(t.followUpDate && fu<=0) badges.push(`<span class="badge follow">🔔 nachhaken</span>`);
   else if(t.followUpDate) badges.push(`<span class="badge">🔔 ${fmtDate(t.followUpDate)}</span>`);
   if(t.milestones.length) badges.push(`<span class="badge">☑ ${msDone}/${t.milestones.length}</span>`);
+  if(t.daily) badges.push(`<span class="badge">🔁 ${dailyExpired(t)?"täglich beendet":("täglich"+(t.dailyUntil?" bis "+fmtDate(t.dailyUntil):""))}</span>`);
   if(showArea && a) badges.push(`<span class="badge"><span class="pdot" style="background:${a.color}"></span>${esc(a.name)}</span>`);
   if(t.project) badges.push(`<span class="badge">📂 ${esc(t.project)}</span>`);
 
-  return `<div class="todo ${t.done?"done":""} ${t.open?"open":""}" data-id="${t.id}">
+  const dn=todoDone(t);
+  return `<div class="todo ${dn?"done":""} ${t.open?"open":""}" data-id="${t.id}">
     <div class="todo-head">
-      <button class="check ${t.done?"on":""}" data-act="toggle">${t.done?"✓":""}</button>
+      <button class="check ${dn?"on":""}" data-act="toggle">${dn?"✓":""}</button>
       <div class="todo-main" data-act="open">
         <div class="todo-title">${esc(t.title)}</div>
         <div class="badges">${badges.join("")}</div>
@@ -683,6 +708,13 @@ function todoCard(t, showArea){
         <div class="field"><label>Frist (erledigt bis)</label><input type="date" data-f="dueDate" value="${t.dueDate||""}"></div>
         <div class="field"><label>Nachhaken am</label><input type="date" data-f="followUpDate" value="${t.followUpDate||""}"></div>
       </div>
+      <div class="field">
+        <label class="row center" style="gap:8px; cursor:pointer">
+          <input type="checkbox" data-f="daily" ${t.daily?"checked":""} style="width:auto; min-height:0">
+          <span>🔁 Tägliches To-do (jeden Tag neu abzuhaken)</span>
+        </label>
+      </div>
+      <div class="field" data-dailyuntil style="${t.daily?"":"display:none"}"><label>Täglich bis (optional – leer = unbefristet)</label><input type="date" data-f="dailyUntil" value="${t.dailyUntil||""}"></div>
       <div class="field"><label>Projekt (optional – gruppiert im Bereich)</label><input data-f="project" list="projListArea" value="${esc(t.project)}" placeholder="z.B. Website Relaunch">
         ${t.project?`<button class="btn sec sm" data-act="unproject" style="margin-top:6px">↑ Aus Projekt lösen (zu normalen To-dos)</button>`:""}</div>
       <div class="field"><label>Milestones / Teilschritte</label>
@@ -727,12 +759,14 @@ function bindTodos(root){
     });
     el.querySelectorAll("[data-f]").forEach(inp=>{
       inp.addEventListener("change", ()=>{
-        let v=inp.value; const f=inp.dataset.f;
+        const f=inp.dataset.f;
+        let v = inp.type==="checkbox" ? inp.checked : inp.value;
         if(f==="priority") v=+v;
-        if(f==="dueDate"||f==="followUpDate") v=v||null;
+        if(f==="dueDate"||f==="followUpDate"||f==="dailyUntil") v=v||null;
         if(f==="title" && !String(v).trim()) return; // Titel nicht leeren
+        if(f==="daily"){ t.daily=v; if(v) t.dailyLog=t.dailyLog||{}; t.updatedAt=Date.now(); save(); render(); return; }
         t[f]=v; t.updatedAt=Date.now(); save();
-        if(f==="areaId"||f==="project"||f==="priority"||f==="dueDate"||f==="title") render();
+        if(f==="areaId"||f==="project"||f==="priority"||f==="dueDate"||f==="title"||f==="dailyUntil") render();
       });
     });
   });
@@ -740,12 +774,12 @@ function bindTodos(root){
 
 /* ============================ VIEW: OVERVIEW ============================ */
 function viewOverview(){
-  const open=S.todos.filter(t=>!t.done);
+  const open=S.todos.filter(t=>todoOpen(t));
   const sorted=[...open].sort((a,b)=>urgency(b)-urgency(a));
   const top=sorted.slice(0,12);
   const overdue=open.filter(t=>daysUntil(t.dueDate)!==null && daysUntil(t.dueDate)<0);
   const followToday=open.filter(t=>daysUntil(t.followUpDate)!==null && daysUntil(t.followUpDate)<=0);
-  const doneToday=S.todos.filter(t=>t.done && t.doneAt===todayStr()).length;
+  const doneToday=S.todos.filter(t=>todoDoneToday(t)).length;
   const remOv=mindReminder(todayStr()); const owOv=ownWordsReminder(todayStr());
   const savedNow=S.savedReminders.some(r=>r.text===remOv);
 
@@ -829,7 +863,7 @@ function viewArea(id){
   const a=areaById(id);
   if(!a){ go("overview"); return; }
   const mine=S.todos.filter(t=>t.areaId===id);
-  const openT=mine.filter(t=>!t.done), doneT=mine.filter(t=>t.done);
+  const openT=mine.filter(t=>todoOpen(t)), doneT=mine.filter(t=>todoDone(t));
 
   // group by project
   const groups={}; const noProj=[];
@@ -898,8 +932,8 @@ function viewArea(id){
     projectNames.forEach(p=>{
       const key=id+"|"+p;
       const collapsed=!!collapsedMap[key];
-      const openP=mine.filter(t=>t.project===p && !t.done).sort((x,y)=>urgency(y)-urgency(x));
-      const doneP=mine.filter(t=>t.project===p && t.done);
+      const openP=mine.filter(t=>t.project===p && todoOpen(t)).sort((x,y)=>urgency(y)-urgency(x));
+      const doneP=mine.filter(t=>t.project===p && todoDone(t));
       html+=`<div class="card">
         <div class="row center" style="justify-content:space-between; gap:8px">
           <button class="grow" data-projtoggle="${esc(key)}" style="text-align:left; display:flex; align-items:center; gap:8px; color:var(--text)">
@@ -990,7 +1024,10 @@ function viewRoutines(){
   let streak=0; for(let i=d30.length-1;i>=0;i--){ if(dayScore(d30[i])>=60) streak++; else break; }
   const focus7=d7.map(x=>S.routineLog[x]&&S.routineLog[x].focus).filter(x=>x);
   const focAvg=focus7.length?(focus7.reduce((a,b)=>a+b,0)/focus7.length).toFixed(1):"–";
-  const todosDone7=S.todos.filter(t=>t.done && t.doneAt && d7.includes(t.doneAt)).length;
+  const todosDone7=S.todos.reduce((n,t)=>{
+    if(t.daily) return n + (t.dailyLog?Object.keys(t.dailyLog).filter(d=>t.dailyLog[d] && d7.includes(d)).length:0);
+    return n + ((t.done && t.doneAt && d7.includes(t.doneAt))?1:0);
+  },0);
 
   let html=`<div class="view-title">Routinen</div>
     <div class="view-sub">Deine privaten Ziele – dranbleiben zählt 🔥</div>
@@ -1682,7 +1719,7 @@ const GOAL_STOP=new Set("und oder der die das den dem ein eine einen einem eines
 function gTokens(str){ return (str||"").toLowerCase().replace(/[^a-zäöüß0-9\s]/g," ").split(/\s+/).filter(w=>w.length>=4 && !GOAL_STOP.has(w)); }
 function goalKeywords(g){ return [...new Set(gTokens(g.title).concat((g.keywords||[]).map(k=>k.toLowerCase())))]; }
 function goalLinkedTodos(g){ const kws=goalKeywords(g); if(!kws.length) return []; return S.todos.filter(t=>{ const txt=((t.title||"")+" "+(t.project||"")+" "+(t.notes||"")).toLowerCase(); return kws.some(k=>txt.includes(k)); }); }
-function goalProgress(g){ const linked=goalLinkedTodos(g); const done=linked.filter(t=>t.done).length; return {linked, done, total:linked.length, pct:linked.length?Math.round(done/linked.length*100):0}; }
+function goalProgress(g){ const linked=goalLinkedTodos(g); const done=linked.filter(t=>todoDone(t)).length; return {linked, done, total:linked.length, pct:linked.length?Math.round(done/linked.length*100):0}; }
 function goalSuggestions(){
   const freq={};
   S.todos.forEach(t=>{ [...new Set(gTokens(t.title).concat(gTokens(t.project)))].forEach(w=>{ freq[w]=(freq[w]||0)+1; }); });
@@ -1724,7 +1761,7 @@ function viewGoals(){
     if(!gs.length) html+=`<div class="empty">Noch keine ${c.label.toLowerCase()}en Ziele.</div>`;
     gs.forEach(g=>{
       const pr=goalProgress(g);
-      const openLinked=pr.linked.filter(t=>!t.done).sort((a,b)=>urgency(b)-urgency(a)).slice(0,4);
+      const openLinked=pr.linked.filter(t=>todoOpen(t)).sort((a,b)=>urgency(b)-urgency(a)).slice(0,4);
       const due=goalCheckDue(g);
       const lastCheck=g.checks&&g.checks.length?g.checks[g.checks.length-1]:null;
       const qq=GOAL_Q[((g.checks&&g.checks.length)||0)%GOAL_Q.length];
@@ -2192,6 +2229,10 @@ $("#brandDate").textContent = "· "+new Date().toLocaleDateString("de-DE",{day:"
 $("#syncBtn").onclick=()=>{ $("#syncSheet").classList.add("open"); const p=$("#syncPass"),a=$("#syncApi"); if(p)p.value=(S.sync&&S.sync.pass)||""; if(a)a.value=(S.sync&&S.sync.apiBase)||""; syncStatus((S.sync&&S.sync.enabled)?"Sync ist aktiv.":"");
   const ri=$("#restoreInfo"); if(ri){ const sw=+(localStorage.getItem(KEY+".safeW")||0); ri.textContent = sw>0 ? `Lokale Sicherung: ${sw} Einträge gespeichert.` : "Noch keine lokale Sicherung."; }
   const ps=$("#pinStatus"); if(ps){ ps.textContent=pinIsSet()?"PIN aktiv ✓":"Kein PIN gesetzt"; ps.style.color=pinIsSet()?"var(--good)":"var(--muted)"; } };
+function fillPinStatus(){ const ps=$("#pinStatus"); if(ps){ ps.textContent=pinIsSet()?"PIN aktiv ✓":"Kein PIN gesetzt"; ps.style.color=pinIsSet()?"var(--good)":"var(--muted)"; } }
+$("#settingsBtn").onclick=()=>{ $("#settingsSheet").classList.add("open"); fillPinStatus(); };
+$("#settingsClose").onclick=()=>$("#settingsSheet").classList.remove("open");
+$("#settingsSheet").onclick=e=>{ if(e.target.id==="settingsSheet") $("#settingsSheet").classList.remove("open"); };
 $("#syncClose").onclick=()=>$("#syncSheet").classList.remove("open");
 $("#syncSheet").onclick=e=>{ if(e.target.id==="syncSheet") $("#syncSheet").classList.remove("open"); };
 $("#syncConnect").onclick=()=>syncConnect($("#syncPass").value,$("#syncApi").value);
