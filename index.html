@@ -345,6 +345,7 @@ function seed(){
     thoughts:[],     // {id, text, tag, ts} freie Gedanken
     creed:"",        // persönliches Leitbild (Leitfaden)
     security:{pinHash:"", pinSalt:""}, // PIN-Schutz
+    deleted:{},      // Tombstones je Sammlung: {coll:{id:ts}}
     tabOrder:[],     // frei angepasste Reihenfolge der Tabs (keys)
     ui:{active:"overview"}
   };
@@ -383,7 +384,7 @@ function save(){
 function ensureState(){
   const defs={ mindAnswers:{}, mindDayQ:{}, mindDayR:{}, mindDayQuote:{}, mindAskedQ:[], mindAskedR:[],
     mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{},
-    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], creed:"", security:{pinHash:"",pinSalt:""}, tabOrder:[],
+    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[],
     sync:{enabled:false, pass:"", apiBase:""} };
   for(const k in defs){ if(S[k]==null) S[k]=defs[k]; }
   if(S._rev==null) S._rev=0;
@@ -547,18 +548,19 @@ function parseTodo(raw){
 }
 
 /* ============================ TODO OPS ============================ */
+function tombstone(coll, id){ S.deleted=S.deleted||{}; (S.deleted[coll]=S.deleted[coll]||{})[id]=Date.now(); }
 function addTodo(o){
   const t={id:uid(), areaId:o.areaId, title:o.title, notes:o.notes||"", project:o.project||"",
     priority:o.priority||2, dueDate:o.dueDate||null, followUpDate:o.followUpDate||null,
-    done:false, doneAt:null, createdAt:todayStr(), open:false, milestones:[]};
+    done:false, doneAt:null, createdAt:todayStr(), open:false, milestones:[], updatedAt:Date.now()};
   S.todos.unshift(t); save(); return t;
 }
 function toggleTodo(id){
   const t=S.todos.find(x=>x.id===id); if(!t) return;
-  t.done=!t.done; t.doneAt=t.done?todayStr():null; save(); render();
+  t.done=!t.done; t.doneAt=t.done?todayStr():null; t.updatedAt=Date.now(); save(); render();
   if(t.done) toast("Erledigt ✓");
 }
-function delTodo(id){ S.todos=S.todos.filter(x=>x.id!==id); save(); render(); }
+function delTodo(id){ tombstone("todos",id); S.todos=S.todos.filter(x=>x.id!==id); save(); render(); }
 
 /* ============================ RENDER: TABS ============================ */
 const SPECIALS_LEFT=[{k:"overview", icon:"🏠", name:"Übersicht"}];
@@ -620,7 +622,7 @@ async function addArea(){
     {key:"icon",label:"Emoji (optional)",value:"📁"}],"Anlegen");
   if(!r||!r.name) return;
   const colors=["#6c8cff","#46c98b","#f5a524","#b78cff","#f26d6d","#4dd0e1","#ff8fa3"];
-  const a={id:"a_"+uid(), name:r.name, icon:r.icon||"📁", color:colors[S.areas.length%colors.length]};
+  const a={id:"a_"+uid(), name:r.name, icon:r.icon||"📁", color:colors[S.areas.length%colors.length], updatedAt:Date.now()};
   S.areas.push(a); go("area:"+a.id); toast("Bereich angelegt");
 }
 
@@ -716,11 +718,11 @@ function bindTodos(root){
         if(act==="del"){ uiConfirm("To-do löschen?","Löschen").then(ok=>{ if(ok) delTodo(id); }); return; }
         if(act==="ms-add"){
           const inp=el.querySelector("[data-msnew]"); const v=inp.value.trim(); if(!v) return;
-          t.milestones.push({id:uid(), title:v, done:false}); save(); render(); return;
+          t.milestones.push({id:uid(), title:v, done:false}); t.updatedAt=Date.now(); save(); render(); return;
         }
-        if(act==="ms-toggle"){ const mid=btn.closest("[data-mid]").dataset.mid; const m=t.milestones.find(x=>x.id===mid); m.done=!m.done; save(); render(); return; }
-        if(act==="ms-del"){ const mid=btn.closest("[data-mid]").dataset.mid; t.milestones=t.milestones.filter(x=>x.id!==mid); save(); render(); return; }
-        if(act==="unproject"){ t.project=""; save(); render(); toast("Aus Projekt gelöst"); return; }
+        if(act==="ms-toggle"){ const mid=btn.closest("[data-mid]").dataset.mid; const m=t.milestones.find(x=>x.id===mid); m.done=!m.done; t.updatedAt=Date.now(); save(); render(); return; }
+        if(act==="ms-del"){ const mid=btn.closest("[data-mid]").dataset.mid; t.milestones=t.milestones.filter(x=>x.id!==mid); t.updatedAt=Date.now(); save(); render(); return; }
+        if(act==="unproject"){ t.project=""; t.updatedAt=Date.now(); save(); render(); toast("Aus Projekt gelöst"); return; }
       });
     });
     el.querySelectorAll("[data-f]").forEach(inp=>{
@@ -729,7 +731,7 @@ function bindTodos(root){
         if(f==="priority") v=+v;
         if(f==="dueDate"||f==="followUpDate") v=v||null;
         if(f==="title" && !String(v).trim()) return; // Titel nicht leeren
-        t[f]=v; save();
+        t[f]=v; t.updatedAt=Date.now(); save();
         if(f==="areaId"||f==="project"||f==="priority"||f==="dueDate"||f==="title") render();
       });
     });
@@ -932,13 +934,14 @@ function viewArea(id){
   };
   $("#ntTitle").onkeydown=e=>{ if(e.key==="Enter") $("#ntAdd").click(); };
   if(moveSug){
-    $("#moveYes").onclick=()=>{ moveSug.t.areaId=moveSug.target.id; if(moveSug.clearProject) moveSug.t.project=""; save(); toast(`Verschoben zu „${moveSug.target.name}"`); render(); };
+    $("#moveYes").onclick=()=>{ moveSug.t.areaId=moveSug.target.id; if(moveSug.clearProject) moveSug.t.project=""; moveSug.t.updatedAt=Date.now(); save(); toast(`Verschoben zu „${moveSug.target.name}"`); render(); };
     $("#moveNo").onclick=()=>{ S.ui.dismissedMove=(S.ui.dismissedMove||[]); S.ui.dismissedMove.push(moveSug.dk); save(); render(); };
   }
   $("#areaEdit").onclick=()=>editArea(a);
   $("#areaDel").onclick=async ()=>{
     const msg = mine.length ? `„${a.name}" enthält ${mine.length} To-dos. Wirklich löschen?` : `Bereich „${a.name}" löschen?`;
     if(!await uiConfirm(msg,"Löschen")) return;
+    mine.forEach(t=>tombstone("todos",t.id)); tombstone("areas",id);
     S.todos=S.todos.filter(t=>t.areaId!==id);
     S.areas=S.areas.filter(x=>x.id!==id); go("overview"); toast("Bereich gelöscht");
   };
@@ -954,15 +957,15 @@ async function editArea(a){
     {key:"name",label:"Name",value:a.name},
     {key:"icon",label:"Emoji / Icon",value:a.icon||""}]);
   if(!r) return;
-  a.name=r.name||a.name; a.icon=r.icon;
+  a.name=r.name||a.name; a.icon=r.icon; a.updatedAt=Date.now();
   save(); render(); toast("Gespeichert");
 }
 async function splitProject(areaId, pName){
   if(!await uiConfirm(`Projekt „${pName}" zu eigenem Tab machen?`,"Herauslösen")) return;
   const colors=["#6c8cff","#46c98b","#f5a524","#b78cff","#f26d6d","#4dd0e1","#ff8fa3"];
   const na={id:"a_"+uid(), name:pName, icon:"📌", color:colors[S.areas.length%colors.length]};
-  S.areas.push(na);
-  S.todos.forEach(t=>{ if(t.areaId===areaId && t.project===pName){ t.areaId=na.id; t.project=""; } });
+  na.updatedAt=Date.now(); S.areas.push(na);
+  S.todos.forEach(t=>{ if(t.areaId===areaId && t.project===pName){ t.areaId=na.id; t.project=""; t.updatedAt=Date.now(); } });
   go("area:"+na.id); toast("Als eigener Tab herausgelöst");
 }
 
@@ -1063,7 +1066,7 @@ function viewRoutines(){
       {key:"name",label:"Name",placeholder:"z.B. Tagebuch schreiben"},
       {key:"icon",label:"Emoji",value:"✅"}],"Anlegen");
     if(!r||!r.name) return;
-    S.routines.push({id:"r_"+uid(), name:r.name, icon:r.icon||"✅"}); save(); render();
+    S.routines.push({id:"r_"+uid(), name:r.name, icon:r.icon||"✅", updatedAt:Date.now()}); save(); render();
   };
 }
 
@@ -1430,9 +1433,9 @@ function viewMind(){
   const ve=$("#valEdit"); if(ve) ve.onclick=()=>{ S.ui.valuesOpen=true; render(); };
   const mtAdd=$("#mtAdd"); if(mtAdd) mtAdd.onclick=()=>{
     const tx=$("#mtText").value.trim(); if(!tx){ toast("Gedanke fehlt"); return; }
-    S.myThoughts.unshift({id:uid(), text:tx, source:$("#mtSrc").value.trim(), ts:todayStr()}); save(); render(); toast("Gedanke gespeichert 💡");
+    S.myThoughts.unshift({id:uid(), text:tx, source:$("#mtSrc").value.trim(), ts:todayStr(), updatedAt:Date.now()}); save(); render(); toast("Gedanke gespeichert 💡");
   };
-  v.querySelectorAll("[data-mtdel]").forEach(b=>b.onclick=()=>{ const mid=b.dataset.mtdel; uiConfirm("Diesen Gedanken löschen?","Löschen").then(ok=>{ if(ok){ S.myThoughts=S.myThoughts.filter(x=>x.id!==mid); save(); render(); } }); });
+  v.querySelectorAll("[data-mtdel]").forEach(b=>b.onclick=()=>{ const mid=b.dataset.mtdel; uiConfirm("Diesen Gedanken löschen?","Löschen").then(ok=>{ if(ok){ tombstone("myThoughts",mid); S.myThoughts=S.myThoughts.filter(x=>x.id!==mid); save(); render(); } }); });
   const qs=$("#qSave"); if(qs) qs.onclick=()=>{
     if(S.savedQuotes.some(x=>x.t===quote.t)){ S.savedQuotes=S.savedQuotes.filter(x=>x.t!==quote.t); toast("Entfernt"); }
     else { S.savedQuotes.unshift({t:quote.t, a:quote.a, ts:todayStr()}); toast("Zitat gespeichert ★"); }
@@ -1475,13 +1478,13 @@ function viewIdeas(){
   const v=$("#view"); v.innerHTML=html;
   $("#idAdd").onclick=()=>{
     const title=$("#idTitle").value.trim(); if(!title){ toast("Titel fehlt"); return; }
-    S.ideas.unshift({id:uid(), title, topic:$("#idTopic").value.trim()||"Allgemein", notes:"", ts:todayStr()});
+    S.ideas.unshift({id:uid(), title, topic:$("#idTopic").value.trim()||"Allgemein", notes:"", ts:todayStr(), updatedAt:Date.now()});
     save(); render(); toast("Idee gespeichert");
   };
   v.querySelectorAll("[data-idea]").forEach(card=>{
     const id=card.dataset.idea;
     card.querySelectorAll("[data-idact]").forEach(b=>b.onclick=()=>{
-      if(b.dataset.idact==="del"){ uiConfirm("Diese Idee löschen?","Löschen").then(ok=>{ if(ok){ S.ideas=S.ideas.filter(x=>x.id!==id); save(); render(); } }); }
+      if(b.dataset.idact==="del"){ uiConfirm("Diese Idee löschen?","Löschen").then(ok=>{ if(ok){ tombstone("ideas",id); S.ideas=S.ideas.filter(x=>x.id!==id); save(); render(); } }); }
       if(b.dataset.idact==="topromote"){
         const i=S.ideas.find(x=>x.id===id);
         addTodo({title:i.title, notes:i.notes, priority:2, areaId:ensureInbox().id});
@@ -1561,7 +1564,7 @@ function viewWishes(){
   const v=$("#view"); v.innerHTML=html;
   $("#wAdd").onclick=()=>{
     const t=$("#wTitle").value.trim(); if(!t){ toast("Titel fehlt"); return; }
-    S.wishes.unshift({id:uid(), title:t, cat:$("#wCat").value, notes:"", done:false, ts:todayStr()});
+    S.wishes.unshift({id:uid(), title:t, cat:$("#wCat").value, notes:"", done:false, ts:todayStr(), updatedAt:Date.now()});
     save(); render(); toast("Wunsch gespeichert ⭐");
   };
   $("#wSuggest").onclick=()=>suggestWish();
@@ -1570,8 +1573,8 @@ function viewWishes(){
     const id=card.dataset.wish;
     card.querySelectorAll("[data-wact]").forEach(b=>b.onclick=()=>{
       const w=S.wishes.find(x=>x.id===id);
-      if(b.dataset.wact==="toggle"){ w.done=!w.done; save(); render(); if(w.done) toast("Erlebt! 🎉"); }
-      if(b.dataset.wact==="del"){ uiConfirm("Diesen Wunsch löschen?","Löschen").then(ok=>{ if(ok){ S.wishes=S.wishes.filter(x=>x.id!==id); save(); render(); } }); }
+      if(b.dataset.wact==="toggle"){ w.done=!w.done; w.updatedAt=Date.now(); save(); render(); if(w.done) toast("Erlebt! 🎉"); }
+      if(b.dataset.wact==="del"){ uiConfirm("Diesen Wunsch löschen?","Löschen").then(ok=>{ if(ok){ tombstone("wishes",id); S.wishes=S.wishes.filter(x=>x.id!==id); save(); render(); } }); }
     });
   });
 }
@@ -1591,7 +1594,7 @@ function suggestWish(){
       <button class="btn grow" id="sgYes">✓ Übernehmen</button>
       <button class="btn sec" id="sgNo">Anderer Vorschlag</button>
     </div></div>`;
-  $("#sgYes").onclick=()=>{ S.wishes.unshift({id:uid(), title:pick.t, cat:pick.c, notes:"", done:false, ts:todayStr()}); save(); render(); toast("Zu deinen Lebenswünschen hinzugefügt ⭐"); };
+  $("#sgYes").onclick=()=>{ S.wishes.unshift({id:uid(), title:pick.t, cat:pick.c, notes:"", done:false, ts:todayStr(), updatedAt:Date.now()}); save(); render(); toast("Zu deinen Lebenswünschen hinzugefügt ⭐"); };
   $("#sgNo").onclick=()=>suggestWish();
 }
 
@@ -1748,14 +1751,14 @@ function viewGoals(){
   });
 
   const v=$("#view"); v.innerHTML=html;
-  $("#goAdd").onclick=()=>{ const t=$("#goTitle").value.trim(); if(!t){toast("Titel fehlt");return;} S.goals.unshift({id:"g_"+uid(), title:t, cat:$("#goCat").value, keywords:[], checks:[], created:todayStr()}); save(); render(); toast("Ziel angelegt 🎯"); };
-  v.querySelectorAll("[data-gsug]").forEach(b=>b.onclick=()=>{ const w=b.dataset.gsug; S.goals.unshift({id:"g_"+uid(), title:w.charAt(0).toUpperCase()+w.slice(1), cat:"beruflich", keywords:[w], checks:[], created:todayStr()}); save(); render(); toast("Ziel aus Vorschlag angelegt"); });
+  $("#goAdd").onclick=()=>{ const t=$("#goTitle").value.trim(); if(!t){toast("Titel fehlt");return;} S.goals.unshift({id:"g_"+uid(), title:t, cat:$("#goCat").value, keywords:[], checks:[], created:todayStr(), updatedAt:Date.now()}); save(); render(); toast("Ziel angelegt 🎯"); };
+  v.querySelectorAll("[data-gsug]").forEach(b=>b.onclick=()=>{ const w=b.dataset.gsug; S.goals.unshift({id:"g_"+uid(), title:w.charAt(0).toUpperCase()+w.slice(1), cat:"beruflich", keywords:[w], checks:[], created:todayStr(), updatedAt:Date.now()}); save(); render(); toast("Ziel aus Vorschlag angelegt"); });
   v.querySelectorAll("[data-goal]").forEach(card=>{
     const id=card.dataset.goal; const g=S.goals.find(x=>x.id===id); if(!g) return; let rating=null;
-    card.querySelector("[data-godel]").onclick=async ()=>{ if(await uiConfirm("Ziel löschen?","Löschen")){ S.goals=S.goals.filter(x=>x.id!==id); save(); render(); } };
-    card.querySelector("[data-goedit]").onclick=async ()=>{ const r=await uiPrompt("Ziel bearbeiten",[{key:"title",label:"Titel",value:g.title},{key:"keywords",label:"Extra-Stichwörter (Komma)",value:(g.keywords||[]).join(", ")}]); if(!r) return; g.title=r.title||g.title; g.keywords=(r.keywords||"").split(",").map(s=>s.trim().toLowerCase()).filter(Boolean); save(); render(); toast("Gespeichert"); };
+    card.querySelector("[data-godel]").onclick=async ()=>{ if(await uiConfirm("Ziel löschen?","Löschen")){ tombstone("goals",id); S.goals=S.goals.filter(x=>x.id!==id); save(); render(); } };
+    card.querySelector("[data-goedit]").onclick=async ()=>{ const r=await uiPrompt("Ziel bearbeiten",[{key:"title",label:"Titel",value:g.title},{key:"keywords",label:"Extra-Stichwörter (Komma)",value:(g.keywords||[]).join(", ")}]); if(!r) return; g.title=r.title||g.title; g.keywords=(r.keywords||"").split(",").map(s=>s.trim().toLowerCase()).filter(Boolean); g.updatedAt=Date.now(); save(); render(); toast("Gespeichert"); };
     card.querySelectorAll("[data-gr]").forEach(b=>b.onclick=()=>{ rating=+b.dataset.gr; card.querySelectorAll("[data-gr]").forEach(x=>x.classList.remove("on")); b.classList.add("on"); });
-    card.querySelector("[data-gcheck]").onclick=()=>{ const note=card.querySelector("[data-gnote]").value.trim(); if(!note && !rating){ toast("Nichts einzutragen"); return; } g.checks=g.checks||[]; g.checks.push({date:todayStr(), rating, note}); save(); render(); toast("Check gespeichert ✓"); };
+    card.querySelector("[data-gcheck]").onclick=()=>{ const note=card.querySelector("[data-gnote]").value.trim(); if(!note && !rating){ toast("Nichts einzutragen"); return; } g.checks=g.checks||[]; g.checks.push({date:todayStr(), rating, note}); g.updatedAt=Date.now(); save(); render(); toast("Check gespeichert ✓"); };
   });
 }
 
@@ -1837,14 +1840,14 @@ function viewBookmarks(){
     if(!url && !title){ toast("Link oder Titel fehlt"); return; }
     let cat=$("#bmCat").value; let auto=false;
     if(cat==="__auto"){ cat=bmAutoCat(url,title); auto=true; }
-    S.bookmarks.unshift({id:uid(), url, title, cat, auto, ts:todayStr()});
+    S.bookmarks.unshift({id:uid(), url, title, cat, auto, ts:todayStr(), updatedAt:Date.now()});
     save(); render(); toast(auto?`Eingeordnet: ${cat}`:"Gespeichert 🔖");
   };
   $("#bmUrl").onkeydown=e=>{ if(e.key==="Enter") $("#bmAdd").click(); };
   v.querySelectorAll("[data-bm]").forEach(card=>{
     const id=card.dataset.bm; const b=S.bookmarks.find(x=>x.id===id); if(!b) return;
-    card.querySelector("[data-bmdel]").onclick=()=>{ S.bookmarks=S.bookmarks.filter(x=>x.id!==id); save(); render(); };
-    card.querySelector("[data-bmcat]").onchange=e=>{ b.cat=e.target.value; b.auto=false; save(); render(); };
+    card.querySelector("[data-bmdel]").onclick=()=>{ uiConfirm("Lesezeichen löschen?","Löschen").then(ok=>{ if(ok){ tombstone("bookmarks",id); S.bookmarks=S.bookmarks.filter(x=>x.id!==id); save(); render(); } }); };
+    card.querySelector("[data-bmcat]").onchange=e=>{ b.cat=e.target.value; b.auto=false; b.updatedAt=Date.now(); save(); render(); };
   });
 }
 
@@ -1896,14 +1899,14 @@ function viewThoughts(){
 
   const v=$("#view"); v.innerHTML=html;
   const add=()=>{ const tx=$("#thText").value.trim(); if(!tx){ toast("Gedanke fehlt"); return; }
-    S.thoughts.unshift({id:uid(), text:tx, tag:$("#thTag").value.trim(), ts:Date.now()}); save(); render(); toast("Gedanke gespeichert 💭"); };
+    S.thoughts.unshift({id:uid(), text:tx, tag:$("#thTag").value.trim(), ts:Date.now(), updatedAt:Date.now()}); save(); render(); toast("Gedanke gespeichert 💭"); };
   $("#thAdd").onclick=add;
   v.querySelectorAll("[data-thtag]").forEach(b=>b.onclick=()=>{ S.ui.thoughtTag=b.dataset.thtag; save(); render(); });
   v.querySelectorAll("[data-th]").forEach(card=>{
     const id=card.dataset.th; const t=S.thoughts.find(x=>x.id===id); if(!t) return;
-    const del=card.querySelector("[data-thdel]"); if(del) del.onclick=()=>{ uiConfirm("Diesen Gedanken löschen?","Löschen").then(ok=>{ if(ok){ S.thoughts=S.thoughts.filter(x=>x.id!==id); save(); render(); } }); };
+    const del=card.querySelector("[data-thdel]"); if(del) del.onclick=()=>{ uiConfirm("Diesen Gedanken löschen?","Löschen").then(ok=>{ if(ok){ tombstone("thoughts",id); S.thoughts=S.thoughts.filter(x=>x.id!==id); save(); render(); } }); };
     const edb=card.querySelector("[data-thedbtn]"); if(edb) edb.onclick=()=>{ S.ui.editThought=id; render(); };
-    const sv=card.querySelector("[data-thsave]"); if(sv) sv.onclick=()=>{ const nv=card.querySelector("[data-thedit]").value.trim(); if(!nv){ toast("Text fehlt"); return; } t.text=nv; t.tag=card.querySelector("[data-thedittag]").value.trim(); S.ui.editThought=null; save(); render(); toast("Gespeichert"); };
+    const sv=card.querySelector("[data-thsave]"); if(sv) sv.onclick=()=>{ const nv=card.querySelector("[data-thedit]").value.trim(); if(!nv){ toast("Text fehlt"); return; } t.text=nv; t.tag=card.querySelector("[data-thedittag]").value.trim(); t.updatedAt=Date.now(); S.ui.editThought=null; save(); render(); toast("Gespeichert"); };
     const cn=card.querySelector("[data-thcancel]"); if(cn) cn.onclick=()=>{ S.ui.editThought=null; render(); };
   });
 }
@@ -1967,6 +1970,46 @@ $("#chatInput").addEventListener("keydown",e=>{ if(e.key==="Enter") chatSend(); 
 /* ============================ GERÄTE-SYNC (Ende-zu-Ende) ============================ */
 function syncApiURL(){ const b=(S.sync&&S.sync.apiBase&&S.sync.apiBase.trim())||(location.origin+"/api/sync"); return b; }
 function stateWeight(s){ if(!s) return 0; return (s.todos?s.todos.length:0)+(s.goals?s.goals.length:0)+(s.bookmarks?s.bookmarks.length:0)+(s.ideas?s.ideas.length:0)+(s.wishes?s.wishes.length:0)+(s.myThoughts?s.myThoughts.length:0)+(s.thoughts?s.thoughts.length:0)+(s.mindAnswers?Object.keys(s.mindAnswers).length:0)+(s.mood?Object.keys(s.mood).length:0)+(s.areas&&s.areas.length>2?s.areas.length-2:0); }
+
+/* ---- Zusammenführung (Merge) auf Eintrags-Ebene ---- */
+const LIST_COLLS=["todos","goals","bookmarks","ideas","wishes","thoughts","myThoughts","areas","routines"];
+const MAP_COLLS=["mindAnswers","mindDayQ","mindDayR","mindDayQuote","valuesDayQ","valuesAns"];
+function _itemTime(it){ return (it&&(it.updatedAt||0))||0; }
+function mergeList(localArr, remoteArr, localTomb, remoteTomb, tombAcc){
+  const tomb={};
+  for(const id in (localTomb||{})) tomb[id]=Math.max(tomb[id]||0, localTomb[id]);
+  for(const id in (remoteTomb||{})) tomb[id]=Math.max(tomb[id]||0, remoteTomb[id]);
+  const byId={};
+  const consider=(arr)=>{ for(const it of (arr||[])){ if(!it||!it.id) continue; const cur=byId[it.id]; if(!cur || _itemTime(it)>=_itemTime(cur)) byId[it.id]=it; } };
+  consider(remoteArr); consider(localArr);
+  const order=[], seen=new Set();
+  (localArr||[]).forEach(it=>{ if(it&&it.id&&byId[it.id]&&!seen.has(it.id)){ seen.add(it.id); order.push(it.id); } });
+  (remoteArr||[]).forEach(it=>{ if(it&&it.id&&byId[it.id]&&!seen.has(it.id)){ seen.add(it.id); order.push(it.id); } });
+  const out=[];
+  order.forEach(id=>{ if((tomb[id]||0) > _itemTime(byId[id])) return; out.push(byId[id]); });
+  const cutoff=Date.now()-60*86400000;
+  for(const id in tomb){ if(tomb[id]>=cutoff) tombAcc[id]=tomb[id]; }
+  return out;
+}
+function unionMap(l, r){ return Object.assign({}, r||{}, l||{}); }
+function mergeRoutineLog(l, r){ const out=Object.assign({}, r||{}); for(const d in (l||{})){ const ld=l[d]||{}, rd=out[d]||{}; out[d]={ done:Object.assign({}, rd.done||{}, ld.done||{}), focus:(ld.focus!=null?ld.focus:rd.focus) }; } return out; }
+function mergeMood(l, r){ const out=Object.assign({}, r||{}); for(const d in (l||{})){ const ld=l[d]||{}, rd=out[d]||{}; out[d]={ morning:Object.assign({}, rd.morning||{}, ld.morning||{}), evening:Object.assign({}, rd.evening||{}, ld.evening||{}) }; } return out; }
+function mergeByKey(l, r, key){ const seen=new Set(), out=[]; (l||[]).concat(r||[]).forEach(it=>{ const k=it&&it[key]; if(k!=null && !seen.has(k)){ seen.add(k); out.push(it); } }); return out; }
+function mergeStates(local, remote){
+  const newer=(remote._rev||0)>(local._rev||0)?remote:local;
+  const m=Object.assign({}, newer);      // Skalare (creed, startDate, tabOrder, security, suggested, dismissedGoalSug) vom neueren Stand
+  m.ui=local.ui; m.sync=local.sync;       // UI + Sync-Einstellungen bleiben lokal
+  const tombOut={};
+  LIST_COLLS.forEach(c=>{ tombOut[c]={}; m[c]=mergeList(local[c], remote[c], (local.deleted||{})[c], (remote.deleted||{})[c], tombOut[c]); });
+  MAP_COLLS.forEach(c=>{ m[c]=unionMap(local[c], remote[c]); });
+  m.routineLog=mergeRoutineLog(local.routineLog, remote.routineLog);
+  m.mood=mergeMood(local.mood, remote.mood);
+  m.savedReminders=mergeByKey(local.savedReminders, remote.savedReminders, "text");
+  m.savedQuotes=mergeByKey(local.savedQuotes, remote.savedQuotes, "t");
+  m.deleted=tombOut;
+  return m;
+}
+function contentSig(s){ const c=Object.assign({}, s); delete c._rev; delete c.ui; delete c.sync; return JSON.stringify(c); }
 function _b64(u8){ let s=""; const CH=0x8000; for(let i=0;i<u8.length;i+=CH){ s+=String.fromCharCode.apply(null,u8.subarray(i,i+CH)); } return btoa(s); }
 function _unb64(b){ return Uint8Array.from(atob(b),c=>c.charCodeAt(0)); }
 async function _deriveKeyId(pass){
@@ -2005,18 +2048,25 @@ async function syncPull(){
   const r=await fetch(syncApiURL()+"?id="+encodeURIComponent(id));
   if(!r.ok) throw new Error("HTTP "+r.status);
   const j=await r.json();
-  if(!j||!j.data) return {status:"empty"};
-  let remote; try{ remote=await _decrypt(key,j.data); }catch(e){ return {status:"badpass"}; }
-  const rrev=Number(j.updated_at)||0;
-  if(rrev>(S._rev||0)){
-    // Schutz: ein (fast) leerer Server-Stand darf einen vollen lokalen Stand nicht überschreiben
-    { const rw=stateWeight(remote), lw=stateWeight(S); if(lw>0 && rw < lw*0.5) return {status:"local-newer"}; }
-    const keep=S.sync; _suppressPush=true;
-    S=remote; S.sync=keep; S._rev=rrev; ensureState();
-    localStorage.setItem(KEY, JSON.stringify(S)); _suppressPush=false;
-    return {status:"pulled"};
+  if(!j||!j.data){
+    // Kein Server-Stand vorhanden -> lokalen Stand hochladen
+    if(!_suppressPush) await syncPush();
+    return {status:"empty"};
   }
-  return {status:(S._rev||0)>rrev?"local-newer":"insync"};
+  let remote; try{ remote=await _decrypt(key,j.data); }catch(e){ return {status:"badpass"}; }
+  ensureState();
+  // Element-genaue Zusammenführung: neue To-dos beider Geräte bleiben erhalten,
+  // Erledigt-/Änderungs-Status gewinnt nach Zeitstempel, gelöschte Einträge bleiben gelöscht (Tombstones).
+  const merged=mergeStates(S, remote);
+  const sigLocal=contentSig(S), sigRemote=contentSig(remote), sigMerged=contentSig(merged);
+  const changedLocal = sigMerged!==sigLocal;
+  const changedRemote = sigMerged!==sigRemote;
+  const keep=S.sync; _suppressPush=true;
+  S=merged; S.sync=keep; ensureState();
+  if(changedLocal) S._rev=Date.now();
+  localStorage.setItem(KEY, JSON.stringify(S)); _suppressPush=false;
+  if(changedRemote){ try{ await syncPush(); }catch(e){} }
+  return {status: changedLocal ? "pulled" : "insync"};
 }
 async function syncConnect(pass, api){
   pass=(pass||"").trim(); if(pass.length<6){ syncStatus("Passphrase zu kurz (mind. 6 Zeichen).","bad"); return; }
