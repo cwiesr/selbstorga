@@ -51,6 +51,8 @@
   .tab.add{color:var(--accent); font-weight:700}
   .tab.editing{border-style:dashed; border-color:var(--accent)}
   .tab .mv{padding:0 5px; font-size:13px; color:var(--accent); font-weight:700}
+  .tab .tabren{margin-left:2px; padding:0 4px; font-size:12px; opacity:.8; border-radius:6px}
+  .tab .tabren:hover{opacity:1; background:rgba(255,255,255,.18)}
 
   main{padding:14px 14px 96px; max-width:760px; margin:0 auto}
   .view-title{font-size:22px; font-weight:750; margin:4px 0 2px}
@@ -482,7 +484,7 @@ function save(){
 function ensureState(){
   const defs={ mindAnswers:{}, mindDayQ:{}, mindDayR:{}, mindDayQuote:{}, mindAskedQ:[], mindAskedR:[],
     mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{},
-    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[],
+    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[], tabLabels:{},
     sync:{enabled:false, pass:"", apiBase:""} };
   for(const k in defs){ if(S[k]==null) S[k]=defs[k]; }
   if(S._rev==null) S._rev=0;
@@ -687,9 +689,17 @@ const SPECIALS_RIGHT=[
   {k:"wishes",   icon:"🌟", name:"Wünsche"},
   {k:"chat",     icon:"💬", name:"Chat"},
 ];
-function tabMeta(key){
+function tabName(key){
+  const custom=(S.tabLabels||{})[key];
   const sp=[...SPECIALS_LEFT,...SPECIALS_RIGHT].find(s=>s.k===key);
-  if(sp) return {label:`${sp.icon} ${esc(sp.name)}`, dot:null};
+  if(sp) return custom||sp.name;
+  if(key.startsWith("area:")){ const a=areaById(key.slice(5)); if(a) return a.name; }
+  return "";
+}
+function tabMeta(key){
+  const custom=(S.tabLabels||{})[key];
+  const sp=[...SPECIALS_LEFT,...SPECIALS_RIGHT].find(s=>s.k===key);
+  if(sp) return {label:`${sp.icon} ${esc(custom||sp.name)}`, dot:null};
   if(key.startsWith("area:")){ const a=areaById(key.slice(5)); if(a) return {label:`${esc(a.icon||"")} ${esc(a.name)}`, dot:a.color}; }
   return null;
 }
@@ -718,7 +728,9 @@ function renderTabs(){
       b.innerHTML=`<span class="mv" data-mv="left" style="${idx===0?"opacity:.25":""}">◀</span>${dot}${meta.label}<span class="mv" data-mv="right" style="${idx===order.length-1?"opacity:.25":""}">▶</span>`;
       b.onclick=(e)=>{ const t=e.target.closest("[data-mv]"); if(t) moveTab(k, t.dataset.mv); };
     } else {
-      b.innerHTML=dot+meta.label; b.onclick=()=>go(k);
+      const active=S.ui.active===k;
+      b.innerHTML=dot+meta.label+(active?`<span class="tabren" data-tabren title="Tab umbenennen">✎</span>`:"");
+      b.onclick=(e)=>{ if(e.target.closest("[data-tabren]")){ e.stopPropagation(); renameTab(k); return; } go(k); };
     }
     bar.appendChild(b);
   });
@@ -736,6 +748,20 @@ async function addArea(){
   const colors=["#6c8cff","#46c98b","#f5a524","#b78cff","#f26d6d","#4dd0e1","#ff8fa3"];
   const a={id:"a_"+uid(), name:r.name, icon:r.icon||"📁", color:colors[S.areas.length%colors.length], updatedAt:Date.now()};
   S.areas.push(a); go("area:"+a.id); toast("Bereich angelegt");
+}
+async function renameTab(key){
+  // Bereichs-Tabs: Name + Emoji (wie ✏️ im Tab)
+  if(key.startsWith("area:")){ const a=areaById(key.slice(5)); if(a) editArea(a); return; }
+  // Spezial-Tabs (Übersicht, Ziele, Mind …): eigener Anzeigename, Emoji bleibt
+  const sp=[...SPECIALS_LEFT,...SPECIALS_RIGHT].find(s=>s.k===key); if(!sp) return;
+  const cur=(S.tabLabels||{})[key]||sp.name;
+  const r=await uiPrompt(`Tab „${sp.icon} ${sp.name}" umbenennen`,[
+    {key:"name", label:"Anzeigename", value:cur, placeholder:sp.name}],"Speichern");
+  if(!r) return;
+  S.tabLabels=S.tabLabels||{};
+  const nm=(r.name||"").trim();
+  if(!nm || nm===sp.name) delete S.tabLabels[key]; else S.tabLabels[key]=nm;
+  save(); render(); toast(nm && nm!==sp.name ? "Tab umbenannt" : "Ursprungsname wiederhergestellt");
 }
 
 /* ============================ RENDER ROUTER ============================ */
@@ -2631,7 +2657,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.10";
+const APP_VERSION="2026-08-27.11";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
