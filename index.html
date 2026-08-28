@@ -89,6 +89,10 @@
   .donerow .donecheck{flex:0 0 auto; width:20px;height:20px;border-radius:6px; background:var(--good); color:#fff; display:grid; place-items:center; font-size:12px}
   .donerow .donetitle{font-weight:600; text-decoration:line-through; opacity:.75; word-break:break-word}
   .donelink{color:var(--good); text-decoration:underline; text-underline-offset:2px; cursor:pointer; font-weight:600}
+  /* Übersicht: Zeit-Abschnitte */
+  .ovsec-head{margin:18px 0 10px; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+  .ovsec-title{font-size:19px; font-weight:750; border-bottom:2px solid var(--accent); padding-bottom:2px}
+  hr.ovsep{border:none; border-top:1px solid var(--border); margin:16px 0 2px}
   .todo[data-board]{cursor:grab}
   .todo[data-board].dragging{opacity:.45}
   .drag-h{flex:0 0 auto; color:var(--muted2); cursor:grab; font-size:16px; line-height:1; padding:2px 2px 0; user-select:none}
@@ -930,22 +934,25 @@ function setColWidth(key, delta){
   S.ui.boardColWByKey[key]=Math.max(COL_MIN, Math.min(COL_MAX, colWidth(key)+delta));
   save(); render();
 }
-function areaBoard(mine, showArea, ctxKey){
-  const openMine=mine.filter(t=>todoOpen(t));
+function boardColumnsHTML(openList, showArea, showWidthCtl){
   let h=`<div class="board">`;
   BOARD_COLS.forEach(c=>{
-    const items=openMine.filter(t=>colOf(t)===c.key).sort((x,y)=>urgency(y)-urgency(x));
+    const items=openList.filter(t=>colOf(t)===c.key).sort((x,y)=>urgency(y)-urgency(x));
     const w=colWidth(c.key);
     h+=`<div class="bcol" data-col="${c.key}" style="flex-basis:${w}px; width:${w}px">
       <div class="bcol-head"><span>${c.label} <span class="tiny muted">${items.length}</span></span>
-        <span class="wctl">
+        ${showWidthCtl?`<span class="wctl">
           <button class="btn ghost xs" data-cw="${c.key}" data-dir="-1" title="schmaler">◄</button>
           <button class="btn ghost xs" data-cw="${c.key}" data-dir="1" title="breiter">►</button>
-        </span></div>
+        </span>`:""}</div>
       <div class="bcol-body">${items.map(t=>todoCard(t,!!showArea,true)).join("")||`<div class="tiny muted" style="padding:10px 4px">Hierher ziehen …</div>`}</div>
     </div>`;
   });
   h+=`</div>`;
+  return h;
+}
+function areaBoard(mine, showArea, ctxKey){
+  let h=boardColumnsHTML(mine.filter(t=>todoOpen(t)), showArea, true);
   h+=donePanel(mine.filter(t=>todoDone(t)), ctxKey||"board", !!showArea);
   return h;
 }
@@ -1148,38 +1155,28 @@ function viewOverview(){
       <div class="tiny muted" style="margin-top:8px">Landet als wichtiges To-do im Eingang. Für mehr Details → Chat 💬</div>
     </div>`;
 
-  if(ovBoard){
-    html+=areaBoard(S.todos, true, "overview");
-  } else {
-  if(followToday.length){
-    html+=`<div class="proj-head">🔔 Jetzt nachhaken</div>`;
-    html+=followToday.map(t=>todoCard(t,true)).join("");
-  }
-  if(overdue.length){
-    html+=`<div class="proj-head" style="color:var(--bad)">⚠ Überfällig</div>`;
-    html+=overdue.sort((a,b)=>urgency(b)-urgency(a)).map(t=>todoCard(t,true)).join("");
-  }
-  const byDue=(lo,hi)=>open.filter(t=>{const d=daysUntil(t.dueDate); return d!==null && d>=lo && d<=hi;}).sort((a,b)=>urgency(b)-urgency(a));
-  const dueGroups=[
-    {label:"Heute fällig", items:byDue(0,0)},
-    {label:"Morgen", items:byDue(1,1)},
-    {label:"In 2–4 Tagen", items:byDue(2,4)},
-    {label:"In 5–10 Tagen", items:byDue(5,10)},
-    {label:"In 11–30 Tagen", items:byDue(11,30)},
+  // Zeit-Abschnitte: Heute · Morgen · Ab Übermorgen (überfällige zählen zu „Heute")
+  const openAll=S.todos.filter(t=>todoOpen(t));
+  const dcat=t=>{ const d=daysUntil(t.dueDate); if(d!==null && d<=0) return "heute"; if(d===1) return "morgen"; return "rest"; };
+  const dstr=(off)=>{ const dd=new Date(); dd.setDate(dd.getDate()+off); return WD[dd.getDay()]+", "+dd.getDate()+"."+(dd.getMonth()+1)+"."; };
+  const sections=[
+    {key:"heute",  label:"Heute",         sub:dstr(0)},
+    {key:"morgen", label:"Morgen",        sub:dstr(1)},
+    {key:"rest",   label:"Ab Übermorgen", sub:dstr(2)},
   ];
-  if(dueGroups.some(g=>g.items.length)){
-    html+=`<div class="proj-head">🗓 Nach Frist</div>`;
-    dueGroups.forEach(g=>{ if(g.items.length){
-      html+=`<div class="tiny muted" style="margin:12px 0 6px; font-weight:700; letter-spacing:.3px">${g.label} · ${g.items.length}</div>`;
-      html+=g.items.map(t=>todoCard(t,true)).join("");
-    }});
-  }
-
-  html+=`<div class="proj-head">🎯 Am wichtigsten gerade</div>`;
-  html+= top.length ? top.map(t=>todoCard(t,true)).join("")
-                    : `<div class="empty">Keine offenen To-dos. Genieß den freien Kopf ✨</div>`;
+  sections.forEach((sec,i)=>{
+    const items=openAll.filter(t=>dcat(t)===sec.key);
+    html+=`<div class="ovsec-head"><span class="ovsec-title">${sec.label}</span><span class="tiny muted">${sec.sub} · ${items.length} offen</span></div>`;
+    if(ovBoard){
+      html+=boardColumnsHTML(items, true, i===0);
+    } else {
+      const sorted=[...items].sort((a,b)=>urgency(b)-urgency(a));
+      html+= sorted.length ? sorted.map(t=>todoCard(t,true)).join("")
+                           : `<div class="tiny muted" style="padding:4px 2px 8px">Keine offenen To-dos.</div>`;
+    }
+    if(i<sections.length-1) html+=`<hr class="ovsep">`;
+  });
   html+=donePanel(S.todos.filter(t=>todoDone(t)), "overview", true);
-  } // Ende Listen-Ansicht Übersicht
 
   const v=$("#view"); v.innerHTML=html; bindTodos(v); bindDone(v);
   $("#ovBoardToggle").onclick=()=>{ S.ui.ovBoard=!S.ui.ovBoard; save(); render(); };
@@ -2657,7 +2654,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.11";
+const APP_VERSION="2026-08-27.12";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
