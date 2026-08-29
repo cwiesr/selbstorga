@@ -657,8 +657,49 @@ function addTodo(o){
   const t={id:uid(), areaId:o.areaId, title:o.title, notes:o.notes||"", project:o.project||"",
     priority:o.priority||2, dueDate:o.dueDate||null, followUpDate:o.followUpDate||null,
     done:false, doneAt:null, createdAt:todayStr(), open:false, milestones:[], updatedAt:Date.now(),
-    daily:!!o.daily, dailyUntil:o.dailyUntil||null, dailyLog:{}, delegated:!!o.delegated};
+    daily:!!o.daily, dailyUntil:o.dailyUntil||null, dailyLog:{}, delegated:!!o.delegated, repeat:o.repeat||null};
   S.todos.unshift(t); save(); return t;
+}
+/* --- Wiederkehrende To-dos: Frist rückt beim Abhaken zum nächsten Termin vor --- */
+function repeatPreset(r){ if(!r||!r.unit) return ""; const e=r.every||1;
+  if(r.unit==="week"&&e===1) return "week";
+  if(r.unit==="month"&&e===1) return "month";
+  if(r.unit==="month"&&e===3) return "quarter";
+  if(r.unit==="year"&&e===1) return "year";
+  return "custom"; }
+function presetToRepeat(p){ switch(p){
+  case "week": return {unit:"week", every:1, dom:null};
+  case "month": return {unit:"month", every:1, dom:null};
+  case "quarter": return {unit:"month", every:3, dom:null};
+  case "year": return {unit:"year", every:1, dom:null};
+  case "custom": return {unit:"month", every:1, dom:null};
+  default: return null; } }
+function _stepDate(d, r){
+  const n=Math.max(1, r.every||1);
+  if(r.unit==="day"){ const x=new Date(d.getTime()); x.setDate(x.getDate()+n); return x; }
+  if(r.unit==="week"){ const x=new Date(d.getTime()); x.setDate(x.getDate()+7*n); return x; }
+  // Monat/Jahr: direkt über Jahr/Monat rechnen (kein Überlauf, der Februar überspringt)
+  let y=d.getFullYear(), m=d.getMonth();
+  if(r.unit==="year") y+=n; else m+=n;
+  y+=Math.floor(m/12); m=((m%12)+12)%12;
+  const day = (r.dom && (r.unit==="month"||r.unit==="year")) ? r.dom : d.getDate();
+  const dim=new Date(y, m+1, 0).getDate();   // Tage im Zielmonat
+  return new Date(y, m, Math.min(day, dim));
+}
+function nextDue(currentISO, r){
+  const today=new Date(todayStr()+"T00:00:00");
+  const base = currentISO ? new Date(currentISO+"T00:00:00") : today;
+  let d=_stepDate(base, r);
+  let g=0; while(d<=today && g++<600){ d=_stepDate(d, r); }
+  return d.toISOString().slice(0,10);
+}
+function repeatLabel(r){ if(!r||!r.unit) return "";
+  const e=Math.max(1, r.every||1);
+  let s = e===1 ? ({day:"täglich",week:"wöchentlich",month:"monatlich",year:"jährlich"}[r.unit]||"")
+                : `alle ${e} ${({day:"Tage",week:"Wochen",month:"Monate",year:"Jahre"}[r.unit]||r.unit)}`;
+  if(r.unit==="month" && e===3) s="vierteljährlich";
+  if(r.dom && (r.unit==="month"||r.unit==="year")) s+=` – am ${r.dom}.`;
+  return s;
 }
 /* --- Tägliche To-dos: erledigt-Status gilt pro Tag, ggf. befristet --- */
 function dailyDoneToday(t){ return !!(t.dailyLog && t.dailyLog[todayStr()]); }
@@ -673,6 +714,15 @@ function toggleTodo(id){
     if(t.dailyLog[d]) delete t.dailyLog[d]; else t.dailyLog[d]=true;
     t.updatedAt=Date.now(); save(); render();
     if(t.dailyLog[d]) toast("Heute erledigt ✓");
+    return;
+  }
+  // Wiederkehrend: beim Abhaken NICHT dauerhaft erledigen, sondern Frist vorrücken
+  if(t.repeat && t.repeat.unit && !t.done){
+    const nd=nextDue(t.dueDate, t.repeat);
+    t.dueDate=nd; t.done=false; t.doneAt=null;
+    t.repeatCount=(t.repeatCount||0)+1; t.repeatLastDone=todayStr();
+    t.updatedAt=Date.now(); save(); render();
+    toast("Erledigt ✓ – nächster Termin: "+fmtDate(nd));
     return;
   }
   t.done=!t.done; t.doneAt=t.done?todayStr():null; t.updatedAt=Date.now(); save(); render();
@@ -799,10 +849,12 @@ function todoCard(t, showArea, board){
   else if(t.followUpDate) badges.push(`<span class="badge">🔔 ${fmtDate(t.followUpDate)}</span>`);
   if(t.milestones.length) badges.push(`<span class="badge">☑ ${msDone}/${t.milestones.length}</span>`);
   if(t.daily) badges.push(`<span class="badge">🔁 ${dailyExpired(t)?"täglich beendet":("täglich"+(t.dailyUntil?" bis "+fmtDate(t.dailyUntil):""))}</span>`);
+  if(t.repeat && t.repeat.unit && !t.daily) badges.push(`<span class="badge">🔁 ${repeatLabel(t.repeat)}</span>`);
   if(showArea && a) badges.push(`<span class="badge"><span class="pdot" style="background:${a.color}"></span>${esc(a.name)}</span>`);
   if(t.project) badges.push(`<span class="badge">📂 ${esc(t.project)}</span>`);
 
   const dn=todoDone(t);
+  const _rp=repeatPreset(t.repeat);
   return `<div class="todo ${dn?"done":""} ${t.open?"open":""}" data-id="${t.id}" ${board?'draggable="true" data-board="1"':''}>
     <div class="todo-head">
       ${board?`<span class="drag-h" data-act="movecol" title="In andere Spalte verschieben">⠿</span>`:''}
@@ -835,6 +887,25 @@ function todoCard(t, showArea, board){
         </label>
       </div>
       <div class="field" data-dailyuntil style="${t.daily?"":"display:none"}"><label>Täglich bis (optional – leer = unbefristet)</label><input type="date" data-f="dailyUntil" value="${t.dailyUntil||""}"></div>
+      ${t.daily?"":`<div class="field"><label>Wiederholung (Frist rückt beim Abhaken vor)</label>
+        <select data-f="repeatPreset">
+          <option value="" ${!t.repeat?"selected":""}>Keine</option>
+          <option value="week" ${_rp==="week"?"selected":""}>Wöchentlich</option>
+          <option value="month" ${_rp==="month"?"selected":""}>Monatlich</option>
+          <option value="quarter" ${_rp==="quarter"?"selected":""}>Vierteljährlich</option>
+          <option value="year" ${_rp==="year"?"selected":""}>Jährlich</option>
+          <option value="custom" ${_rp==="custom"?"selected":""}>Benutzerdefiniert …</option>
+        </select></div>
+      ${t.repeat?`<div class="grid2" data-repeatcustom>
+        <div class="field"><label>alle</label><input type="number" min="1" max="999" data-f="repeatEvery" value="${(t.repeat.every)||1}"></div>
+        <div class="field"><label>Einheit</label><select data-f="repeatUnit">
+          <option value="day" ${t.repeat.unit==="day"?"selected":""}>Tage</option>
+          <option value="week" ${t.repeat.unit==="week"?"selected":""}>Wochen</option>
+          <option value="month" ${t.repeat.unit==="month"?"selected":""}>Monate</option>
+          <option value="year" ${t.repeat.unit==="year"?"selected":""}>Jahre</option>
+        </select></div>
+        <div class="field" style="grid-column:1 / -1"><label>am festen Tag des Monats (optional, z.B. 2 = jeden 2.)</label><input type="number" min="1" max="31" data-f="repeatDom" value="${t.repeat.dom||""}" placeholder="leer = wie Frist"></div>
+      </div>`:""}`}
       <div class="field"><label>Projekt (optional – gruppiert im Bereich)</label><input data-f="project" list="projListArea" value="${esc(t.project)}" placeholder="z.B. Website Relaunch">
         ${t.project?`<button class="btn sec sm" data-act="unproject" style="margin-top:6px">↑ Aus Projekt lösen (zu normalen To-dos)</button>`:""}</div>
       <div class="field"><label>Milestones / Teilschritte</label>
@@ -886,6 +957,14 @@ function bindTodos(root){
         if(f==="dueDate"||f==="followUpDate"||f==="dailyUntil") v=v||null;
         if(f==="title" && !String(v).trim()) return; // Titel nicht leeren
         if(f==="daily"){ t.daily=v; if(v) t.dailyLog=t.dailyLog||{}; t.updatedAt=Date.now(); save(); render(); return; }
+        if(f==="repeatPreset"){
+          if(!v){ t.repeat=null; }
+          else { const keepDom=(t.repeat&&t.repeat.dom)||null; t.repeat=presetToRepeat(v); if(t.repeat && keepDom!=null && (t.repeat.unit==="month"||t.repeat.unit==="year")) t.repeat.dom=keepDom; }
+          t.updatedAt=Date.now(); save(); render(); return;
+        }
+        if(f==="repeatEvery"){ if(t.repeat) t.repeat.every=Math.max(1, parseInt(v)||1); t.updatedAt=Date.now(); save(); render(); return; }
+        if(f==="repeatUnit"){ if(t.repeat) t.repeat.unit=v; t.updatedAt=Date.now(); save(); render(); return; }
+        if(f==="repeatDom"){ if(t.repeat){ const n=parseInt(v); t.repeat.dom=(n>=1&&n<=31)?n:null; } t.updatedAt=Date.now(); save(); render(); return; }
         t[f]=v; t.updatedAt=Date.now(); save();
         if(f==="areaId"||f==="project"||f==="priority"||f==="dueDate"||f==="title"||f==="dailyUntil") render();
       });
@@ -2654,7 +2733,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.12";
+const APP_VERSION="2026-08-27.13";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
