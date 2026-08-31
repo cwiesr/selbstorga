@@ -1212,7 +1212,10 @@ function viewOverview(){
           <div class="small" style="font-weight:600; margin-bottom:4px">✦ Erinnerung fürs Leben</div>
           <div>${esc(remOv)}</div>
         </div>
-        <button class="btn ghost" id="remSave" title="Erinnerung speichern" style="font-size:20px; padding:6px 8px; color:${savedNow?'var(--warn)':'var(--muted)'}">${savedNow?"★":"☆"}</button>
+        <div class="row" style="gap:2px; flex:0 0 auto">
+          <button class="btn ghost" id="remNew" title="Neue Erinnerung für heute" style="font-size:18px; padding:6px 8px; color:var(--muted)">🔄</button>
+          <button class="btn ghost" id="remSave" title="Erinnerung speichern" style="font-size:20px; padding:6px 8px; color:${savedNow?'var(--warn)':'var(--muted)'}">${savedNow?"★":"☆"}</button>
+        </div>
       </div>
       ${owOv?`<div class="tiny muted" style="margin-top:8px">Deine Worte (${fmtDate(owOv.date)}): „${esc(trimWords(owOv.a,18))}"</div>`:""}
       ${S.savedReminders.length?`<button class="link" id="remToggle" style="margin-top:10px; display:inline-block">★ Gespeicherte (${S.savedReminders.length})</button>`:""}
@@ -1266,6 +1269,7 @@ function viewOverview(){
     addTodo({title:val, priority:3, dueDate:due, areaId:ensureInbox().id});
     q.value=""; toast("To-do angelegt"); render(); };
   qb.onclick=doQ; q.onkeydown=e=>{ if(e.key==="Enter") doQ(); };
+  const rn=$("#remNew"); if(rn) rn.onclick=rerollReminder;
   const rs=$("#remSave"); if(rs) rs.onclick=()=>{
     if(S.savedReminders.some(r=>r.text===remOv)){ S.savedReminders=S.savedReminders.filter(r=>r.text!==remOv); toast("Entfernt"); }
     else { S.savedReminders.unshift({text:remOv, ts:todayStr()}); toast("Erinnerung gespeichert ★"); }
@@ -1743,6 +1747,15 @@ function mindReminder(date){
   if(S.mindDayR[date]) return S.mindDayR[date];
   const p=pickNonRepeating(reminderBank(), S.mindDayR, date);
   S.mindDayR[date]=p; S.mindAskedR.push(p); save(); return p;
+}
+function rerollReminder(){
+  const d=todayStr(); const cur=S.mindDayR[d];
+  delete S.mindDayR[d];                                   // heutigen Eintrag freigeben
+  let bank=reminderBank().filter(x=>x!==cur);             // nicht dieselbe wie eben
+  if(!bank.length) bank=reminderBank();
+  const p=pickNonRepeating(bank, S.mindDayR, d);
+  S.mindDayR[d]=p; S.mindAskedR.push(p); save(); render();
+  toast("Neue Erinnerung ✨");
 }
 function mindQuote(date){
   if(S.mindDayQuote[date]) return S.mindDayQuote[date];
@@ -2755,7 +2768,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.14";
+const APP_VERSION="2026-08-27.15";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
