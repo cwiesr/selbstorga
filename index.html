@@ -1652,6 +1652,23 @@ const MIND_R=[
   "Denk an dein 'Warum'. Es macht das 'Wie' leichter. 🎯",
   "Weniger Bildschirm, mehr Leben. Nur für eine Stunde heute. 📵",
   "Du darfst Dinge tun, nur weil sie dir Spaß machen. 🎨",
+  "Trink ein Glas Wasser und streck dich kurz. Dein Körper trägt dich den ganzen Tag. 💧",
+  "Schreib dir auf, wofür du heute dankbar bist – ein Satz reicht. 🙏",
+  "Lächle jemanden an. Es kostet nichts und verändert Momente. 😊",
+  "Räum eine Kleinigkeit auf. Klare Umgebung, klarer Kopf. 🧹",
+  "Hör deinen Lieblingssong – ganz, ohne nebenbei etwas zu tun. 🎧",
+  "Frag dich heute Abend: Was war heute schön? 🌙",
+  "Beweg dich zehn Minuten, wie du magst. Der Rest folgt von allein. 🏃",
+  "Lass das Handy beim Essen liegen und schmeck bewusst. 🍽️",
+  "Setz dir heute nur ein wichtiges Ziel. Alles andere ist Bonus. 🎯",
+  "Verzeih dir einen Fehler von gestern. Heute ist ein neuer Anlauf. 🌅",
+  "Gönn dir eine echte Pause – ganz ohne Bildschirm. ⏸️",
+  "Tu heute beiläufig etwas Gutes für jemanden. 🤝",
+  "Freu dich über kleine Fortschritte. Sie summieren sich. 📈",
+  "Sei neugierig statt streng mit dir. Was lernst du gerade über dich? 🔍",
+  "Leg dich für ein paar Minuten einfach hin und tu nichts. 😌",
+  "Denk an einen schönen Moment dieser Woche und lass ihn kurz wirken. 🎞️",
+  "Iss heute etwas, das dir richtig schmeckt. 🍓",
 ];
 /* ============================ MIND: HELPERS ============================ */
 function dayNumber(){ const a=new Date(S.startDate+"T00:00:00"), b=new Date(todayStr()+"T00:00:00"); return Math.max(0, Math.round((b-a)/86400000)); }
@@ -1697,6 +1714,15 @@ function assignValuesDay(date){
   for(let i=0;i<2 && pool.length;i++){ const idx=Math.floor(Math.random()*pool.length); two.push(pool[idx]); S.valuesAsked.push(pool[idx]); pool.splice(idx,1); }
   S.valuesDayQ[date]=two; save(); return two;
 }
+// „Schon gezeigt" wird aus den Tages-Karten abgeleitet (die werden geräteübergreifend
+// zusammengeführt) – so wiederholt sich nichts, bis der Vorrat wirklich durch ist.
+function pickNonRepeating(bank, map, date, keyOf){
+  keyOf = keyOf || (x=>x);
+  const seen=new Set(); for(const k in (map||{})){ const v=map[k]; if(v!=null) seen.add(keyOf(v)); }
+  let pool=bank.filter(x=>!seen.has(keyOf(x)));
+  if(!pool.length) pool=bank.slice();          // Vorrat erschöpft -> von vorn (dann erst Wiederholung)
+  return pool[Math.floor(Math.random()*pool.length)];
+}
 function mindQuestion(date){
   if(S.mindDayQ[date]) return S.mindDayQ[date];
   const vals=collectValues(); let q;
@@ -1704,9 +1730,8 @@ function mindQuestion(date){
     const src=vals[Math.floor(Math.random()*vals.length)];
     q=`Du hast einmal notiert: „${trimWords(src.a,16)}" — lebst du das gerade wirklich? Was würde es stärker machen?`;
   } else {
-    let pool=MIND_Q.filter(x=>!S.mindAskedQ.includes(x));
-    if(!pool.length){ S.mindAskedQ.length=0; pool=MIND_Q.slice(); }
-    q=pool[Math.floor(Math.random()*pool.length)]; S.mindAskedQ.push(q);
+    q=pickNonRepeating(MIND_Q, S.mindDayQ, date);
+    S.mindAskedQ.push(q);
   }
   S.mindDayQ[date]=q; save(); return q;
 }
@@ -1716,16 +1741,13 @@ function reminderBank(){
 }
 function mindReminder(date){
   if(S.mindDayR[date]) return S.mindDayR[date];
-  const bank=reminderBank();
-  let pool=bank.filter(x=>!S.mindAskedR.includes(x));
-  if(!pool.length){ S.mindAskedR.length=0; pool=bank.slice(); }
-  const p=pool[Math.floor(Math.random()*pool.length)]; S.mindDayR[date]=p; S.mindAskedR.push(p); save(); return p;
+  const p=pickNonRepeating(reminderBank(), S.mindDayR, date);
+  S.mindDayR[date]=p; S.mindAskedR.push(p); save(); return p;
 }
 function mindQuote(date){
   if(S.mindDayQuote[date]) return S.mindDayQuote[date];
-  let pool=QUOTES.filter(x=>!S.mindAskedQuote.includes(x.t));
-  if(!pool.length){ S.mindAskedQuote.length=0; pool=QUOTES.slice(); }
-  const p=pool[Math.floor(Math.random()*pool.length)]; S.mindDayQuote[date]=p; S.mindAskedQuote.push(p.t); save(); return p;
+  const p=pickNonRepeating(QUOTES, S.mindDayQuote, date, x=>x&&x.t);
+  S.mindDayQuote[date]=p; S.mindAskedQuote.push(p.t); save(); return p;
 }
 function ownWordsReminder(exceptDate){
   const past=Object.keys(S.mindAnswers).filter(d=>d!==exceptDate && S.mindAnswers[d] && S.mindAnswers[d].a);
@@ -2733,7 +2755,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.13";
+const APP_VERSION="2026-08-27.14";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
