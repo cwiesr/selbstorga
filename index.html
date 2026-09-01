@@ -106,6 +106,28 @@
   .dgbar{display:flex; align-items:center; gap:8px; padding:5px 0}
   .dgbar-track{flex:1 1 auto; height:8px; border-radius:6px; background:var(--panel2); overflow:hidden}
   .dgbar-fill{height:100%; background:var(--good)}
+  /* Stundendokumentation / Kalender */
+  .hcal-wrap{width:calc(100vw - 20px); margin-left:calc(50% - 50vw + 10px); overflow-x:auto; padding:0 10px 10px}
+  .hcal{display:grid; grid-template-columns:52px repeat(7, minmax(120px,1fr)); gap:1px; background:var(--border); border:1px solid var(--border); border-radius:10px; overflow:hidden; min-width:760px}
+  .hcal .hc{background:var(--panel); padding:4px}
+  .hcal .hc-head{background:var(--panel2); font-weight:700; font-size:12px; text-align:center; padding:6px 4px; position:sticky; top:0}
+  .hcal .hc-head.today{color:var(--accent)}
+  .hcal .hc-time{background:var(--panel2); font-size:11px; color:var(--muted); text-align:right; padding:4px 6px}
+  .hcal .hc-slot{min-height:42px; cursor:pointer; display:flex; flex-direction:column; gap:2px}
+  .hcal .hc-slot:hover{background:var(--panel2)}
+  .lchip{background:var(--accent-dim); border:1px solid var(--accent); border-radius:6px; padding:2px 5px; font-size:11px; line-height:1.25; cursor:pointer; color:var(--text)}
+  .lchip.allpaid{background:rgba(70,201,139,.16); border-color:var(--good)}
+  .lchip.unpaid{background:rgba(245,165,36,.16); border-color:var(--warn)}
+  .htabs{display:flex; gap:6px; margin:4px 0 12px; flex-wrap:wrap}
+  .htab{padding:7px 12px; border-radius:999px; background:var(--panel); border:1px solid var(--border); color:var(--muted); font-size:13px; cursor:pointer}
+  .htab.on{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600}
+  .prow{display:flex; align-items:center; gap:8px; padding:9px 10px; border:1px solid var(--border); border-radius:10px; background:var(--panel); margin-bottom:6px}
+  .part-row{display:grid; grid-template-columns:1fr 76px 1fr auto; gap:6px; align-items:center; margin-bottom:6px}
+  .part-row input, .part-row select{min-height:38px}
+  @media(max-width:520px){ .part-row{grid-template-columns:1fr 1fr; } }
+  .paychip{font-size:11px; padding:2px 7px; border-radius:999px; border:1px solid var(--border)}
+  .paychip.ok{background:rgba(70,201,139,.16); border-color:var(--good); color:var(--good)}
+  .paychip.open{background:rgba(245,165,36,.16); border-color:var(--warn); color:var(--warn)}
   .todo[data-board]{cursor:grab}
   .todo[data-board].dragging{opacity:.45}
   .drag-h{flex:0 0 auto; color:var(--muted2); cursor:grab; font-size:16px; line-height:1; padding:2px 2px 0; user-select:none}
@@ -353,6 +375,13 @@
   </div>
 </div>
 
+<div class="sheet" id="lessonSheet">
+  <div class="sheet-inner" style="border-radius:18px; left:14px; right:14px; bottom:auto; top:50%; transform:translateY(-50%); max-width:520px; margin:0 auto; max-height:92vh; overflow:auto">
+    <div class="sheet-head"><b id="lessonTitle">Stunde erfassen</b><button class="btn ghost" id="lessonClose">✕</button></div>
+    <div id="lessonBody" style="padding:14px"></div>
+  </div>
+</div>
+
 <div class="lock" id="lockScreen">
   <div class="lock-box">
     <div class="lock-logo">🔒</div>
@@ -415,6 +444,8 @@ function seed(){
     security:{pinHash:"", pinSalt:""}, // PIN-Schutz
     deleted:{},      // Tombstones je Sammlung: {coll:{id:ts}}
     tabOrder:[],     // frei angepasste Reihenfolge der Tabs (keys)
+    players:[],      // {id, name, rate, notes, topups:[{id,hours,date,note}], updatedAt}
+    lessons:[],      // {id, date, time, durationMin, title, participants:[{playerId,price,method,paid}], updatedAt, createdAt}
     ui:{active:"overview"}
   };
 }
@@ -501,7 +532,7 @@ function save(){
 function ensureState(){
   const defs={ mindAnswers:{}, mindDayQ:{}, mindDayR:{}, mindDayQuote:{}, mindAskedQ:[], mindAskedR:[],
     mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{},
-    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[], tabLabels:{}, dayGoalLog:{},
+    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[], tabLabels:{}, dayGoalLog:{}, players:[], lessons:[],
     sync:{enabled:false, pass:"", apiBase:""} };
   for(const k in defs){ if(S[k]==null) S[k]=defs[k]; }
   if(S._rev==null) S._rev=0;
@@ -754,6 +785,7 @@ const SPECIALS_RIGHT=[
   {k:"thoughts", icon:"💭", name:"Gedanken"},
   {k:"bookmarks",icon:"🔖", name:"Lesezeichen"},
   {k:"wishes",   icon:"🌟", name:"Wünsche"},
+  {k:"hours",    icon:"🎾", name:"Stundendoku"},
   {k:"chat",     icon:"💬", name:"Chat"},
 ];
 function tabName(key){
@@ -844,6 +876,7 @@ function render(){
   if(k==="bookmarks")return viewBookmarks();
   if(k==="thoughts") return viewThoughts();
   if(k==="guide")    return viewGuide();
+  if(k==="hours")    return viewHours();
   if(k==="chat")     return viewChat();
   if(k.startsWith("area:")) return viewArea(k.slice(5));
   viewOverview();
@@ -2584,6 +2617,216 @@ function viewGuide(){
   $("#guideExport").onclick=()=>{ try{ const blob=new Blob([guideText()],{type:"text/plain"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="mein-lebensleitfaden.txt"; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},200);}catch(e){toast("Export fehlgeschlagen");} };
 }
 
+/* ============================ STUNDENDOKUMENTATION (Tennis) ============================ */
+const PAY_METHODS=["Offen","Bar","Überweisung","PayPal","Guthaben"];
+function playerById(id){ return (S.players||[]).find(p=>p.id===id); }
+function lessonHours(l){ return (l.durationMin||60)/60; }
+function playerTopups(pid){ const p=playerById(pid); if(!p||!p.topups) return 0; return p.topups.reduce((s,t)=>s+(parseFloat(t.hours)||0),0); }
+function playerUsedCredit(pid){ let h=0; (S.lessons||[]).forEach(l=>{ (l.participants||[]).forEach(pt=>{ if(pt.playerId===pid && pt.method==="Guthaben") h+=lessonHours(l); }); }); return h; }
+function playerCredit(pid){ return Math.round((playerTopups(pid)-playerUsedCredit(pid))*100)/100; }
+function isPaid(pt){ return !!(pt && pt.method && pt.method!=="Offen"); }   // "Offen" = noch nicht bezahlt
+function mondayOf(iso){ const d=new Date(iso+"T00:00:00"); const wd=(d.getDay()+6)%7; d.setDate(d.getDate()-wd); return d.toISOString().slice(0,10); }
+function addDaysIso(iso,n){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function hoursWeekStart(){ if(!S.ui.hoursWeek) S.ui.hoursWeek=mondayOf(todayStr()); return S.ui.hoursWeek; }
+
+function viewHours(){
+  const tab=S.ui.hoursTab=S.ui.hoursTab||"kal";
+  let html=`<div class="view-title">🎾 ${esc(tabName("hours"))}</div>
+    <div class="view-sub">Stunden dokumentieren · Guthaben verwalten · offene Zahlungen sehen</div>
+    <div class="htabs">
+      <button class="htab ${tab==="kal"?"on":""}" data-htab="kal">📅 Kalender</button>
+      <button class="htab ${tab==="spieler"?"on":""}" data-htab="spieler">👥 Spieler</button>
+      <button class="htab ${tab==="offen"?"on":""}" data-htab="offen">💶 Offene Zahlungen</button>
+    </div>`;
+  if(tab==="kal") html+=hoursCalendarHTML();
+  else if(tab==="spieler") html+=hoursPlayersHTML();
+  else html+=hoursUnpaidHTML();
+  const v=$("#view"); v.innerHTML=html;
+  v.querySelectorAll("[data-htab]").forEach(b=>b.onclick=()=>{ S.ui.hoursTab=b.dataset.htab; save(); render(); });
+  bindHours(v);
+}
+function lessonChip(l){
+  const parts=l.participants||[];
+  const allPaid=parts.length && parts.every(isPaid);
+  const someUnpaid=parts.some(pt=>!isPaid(pt));
+  const names=parts.map(pt=>{ const p=playerById(pt.playerId); return p?esc(p.name.split(" ")[0]):"?"; }).join(", ");
+  const cls=parts.length ? (allPaid?"allpaid":(someUnpaid?"unpaid":"")) : "";
+  return `<div class="lchip ${cls}" data-lesson="${l.id}">${esc(l.time||"")} ${esc(l.title||"Stunde")}${names?` · ${names}`:""}</div>`;
+}
+function hoursCalendarHTML(){
+  const ws=hoursWeekStart();
+  const days=Array.from({length:7},(_,i)=>addDaysIso(ws,i));
+  const today=todayStr(); const wd=["Mo","Di","Mi","Do","Fr","Sa","So"];
+  let h=`<div class="row center" style="justify-content:space-between; gap:8px; margin-bottom:10px; flex-wrap:wrap">
+    <div class="row center" style="gap:6px">
+      <button class="btn ghost sm" data-wk="-1">‹</button>
+      <b>${fmtDate(days[0])} – ${fmtDate(days[6])}</b>
+      <button class="btn ghost sm" data-wk="1">›</button>
+      <button class="btn ghost sm" data-wk="0">Heute</button>
+    </div>
+    <button class="btn sm" data-newlesson="1">＋ Stunde erfassen</button>
+  </div>`;
+  h+=`<div class="hcal-wrap"><div class="hcal"><div class="hc hc-head"></div>`;
+  days.forEach((d,i)=>{ const dd=new Date(d+"T00:00:00"); h+=`<div class="hc hc-head ${d===today?"today":""}">${wd[i]} ${dd.getDate()}.${dd.getMonth()+1}.</div>`; });
+  for(let hr=7; hr<=21; hr++){
+    h+=`<div class="hc hc-time">${hr}:00</div>`;
+    days.forEach(d=>{
+      const inSlot=(S.lessons||[]).filter(l=>l.date===d && parseInt((l.time||"0").split(":")[0],10)===hr).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+      h+=`<div class="hc hc-slot" data-slot="${d}|${hr}">${inSlot.map(lessonChip).join("")}</div>`;
+    });
+  }
+  h+=`</div></div><div class="tiny muted" style="margin-top:6px">Tipp: auf eine Uhrzeit tippen, um dort eine Stunde einzutragen. Farbe: grün = alle bezahlt, orange = offen.</div>`;
+  return h;
+}
+function hoursPlayersHTML(){
+  let h=`<div class="card"><h3>Neuer Spieler</h3>
+    <div class="grid2">
+      <div class="field"><label>Name</label><input id="npName" placeholder="Vor- und Nachname" autocomplete="off"></div>
+      <div class="field"><label>Preis / Stunde (€, optional)</label><input id="npRate" type="number" min="0" step="1" placeholder="z.B. 25"></div>
+    </div>
+    <button class="btn" id="npAdd" style="width:100%">Spieler anlegen</button>
+  </div>`;
+  const players=[...(S.players||[])].sort((a,b)=>a.name.localeCompare(b.name));
+  if(!players.length){ h+=`<div class="empty">Noch keine Spieler. Leg oben einen an.</div>`; return h; }
+  h+=players.map(p=>{
+    const cr=playerCredit(p.id);
+    const col=cr>0?"var(--good)":(cr<0?"var(--bad)":"var(--muted)");
+    return `<div class="card">
+      <div class="row center" style="justify-content:space-between; gap:8px">
+        <div style="min-width:0"><b>${esc(p.name)}</b>${p.rate?` <span class="tiny muted">· ${p.rate} €/Std</span>`:""}
+          <div class="small" style="margin-top:2px">Guthaben: <b style="color:${col}">${cr} Std</b>${playerUsedCredit(p.id)?` <span class="tiny muted">(${playerTopups(p.id)} geladen − ${playerUsedCredit(p.id)} genutzt)</span>`:""}</div></div>
+        <div class="row" style="gap:4px; flex:0 0 auto">
+          <button class="btn ghost sm" data-ptop="${p.id}">＋ Guthaben</button>
+          <button class="btn ghost sm" data-pedit="${p.id}">✏️</button>
+          <button class="btn ghost sm" data-pdel="${p.id}">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+  return h;
+}
+function hoursUnpaidHTML(){
+  const rows=[];
+  (S.lessons||[]).forEach(l=>{ (l.participants||[]).forEach(pt=>{ if(!isPaid(pt)) rows.push({l,pt}); }); });
+  if(!rows.length) return `<div class="empty">Keine offenen Zahlungen 🎉</div>`;
+  const byP={}; rows.forEach(r=>{ const pid=r.pt.playerId||"?"; (byP[pid]=byP[pid]||[]).push(r); });
+  const total=rows.reduce((s,r)=>s+(parseFloat(r.pt.price)||0),0);
+  let h=`<div class="view-sub" style="margin-bottom:10px">${rows.length} offene Position(en) · gesamt <b style="color:var(--warn)">${total} €</b></div>`;
+  Object.keys(byP).forEach(pid=>{
+    const p=playerById(pid); const list=byP[pid];
+    const sum=list.reduce((s,r)=>s+(parseFloat(r.pt.price)||0),0);
+    h+=`<div class="card"><div class="row center" style="justify-content:space-between"><b>${p?esc(p.name):"Unbekannt"}</b><b style="color:var(--warn)">${sum} € offen</b></div>
+      <div style="margin-top:6px">${list.map(r=>`<div class="prow" data-lesson="${r.l.id}" style="cursor:pointer">
+        <div class="grow"><div>${fmtDate(r.l.date)} ${esc(r.l.time||"")} · ${esc(r.l.title||"Stunde")}</div></div>
+        <span class="paychip open">${parseFloat(r.pt.price)||0} € offen</span>
+      </div>`).join("")}</div>
+    </div>`;
+  });
+  h+=`<div class="tiny muted">Tippe eine Position an, um die Stunde zu öffnen und die Zahlung zu erfassen.</div>`;
+  return h;
+}
+function bindHours(root){
+  root.querySelectorAll("[data-wk]").forEach(b=>b.onclick=()=>{ const v=+b.dataset.wk; S.ui.hoursWeek = v===0 ? mondayOf(todayStr()) : addDaysIso(hoursWeekStart(), v*7); save(); render(); });
+  root.querySelectorAll("[data-newlesson]").forEach(b=>b.onclick=()=>openLesson(null));
+  root.querySelectorAll("[data-slot]").forEach(el=>el.onclick=(e)=>{ if(e.target.closest("[data-lesson]")) return; const [d,hr]=el.dataset.slot.split("|"); openLesson(null,d,hr); });
+  root.querySelectorAll("[data-lesson]").forEach(el=>el.onclick=(e)=>{ e.stopPropagation(); openLesson(el.dataset.lesson); });
+  root.querySelectorAll("[data-ptop]").forEach(b=>b.onclick=()=>topupPlayer(b.dataset.ptop));
+  root.querySelectorAll("[data-pedit]").forEach(b=>b.onclick=()=>editPlayer(b.dataset.pedit));
+  root.querySelectorAll("[data-pdel]").forEach(b=>b.onclick=()=>delPlayer(b.dataset.pdel));
+  const na=root.querySelector("#npAdd"); if(na){ na.onclick=addPlayerFromForm; const ni=root.querySelector("#npName"); if(ni) ni.onkeydown=e=>{ if(e.key==="Enter") addPlayerFromForm(); }; }
+}
+function addPlayerFromForm(){
+  const name=($("#npName").value||"").trim(); if(!name){ toast("Name fehlt"); return; }
+  const rate=parseFloat($("#npRate").value)||0;
+  S.players.unshift({id:uid(), name, rate, notes:"", topups:[], updatedAt:Date.now()});
+  save(); render(); toast("Spieler angelegt ✓");
+}
+async function topupPlayer(id){ const p=playerById(id); if(!p) return;
+  const r=await uiPrompt(`Guthaben für ${p.name}`,[{key:"hours",label:"Stunden aufladen",value:"5"},{key:"note",label:"Notiz (optional)",value:""}],"Aufladen");
+  if(!r) return; const hrs=parseFloat(String(r.hours||"").replace(",","."))||0; if(hrs<=0){ toast("Ungültige Stundenzahl"); return; }
+  p.topups=p.topups||[]; p.topups.push({id:uid(), hours:hrs, date:todayStr(), note:r.note||""}); p.updatedAt=Date.now(); save(); render(); toast(`+${hrs} Std Guthaben`);
+}
+async function editPlayer(id){ const p=playerById(id); if(!p) return;
+  const r=await uiPrompt("Spieler bearbeiten",[{key:"name",label:"Name",value:p.name},{key:"rate",label:"Preis/Stunde (€)",value:p.rate||""}]);
+  if(!r) return; if(r.name) p.name=r.name; p.rate=parseFloat(r.rate)||0; p.updatedAt=Date.now(); save(); render(); toast("Gespeichert");
+}
+async function delPlayer(id){ const p=playerById(id); if(!p) return;
+  if(!await uiConfirm(`Spieler „${p.name}" löschen? Bereits dokumentierte Stunden bleiben erhalten.`,"Löschen")) return;
+  tombstone("players",id); S.players=S.players.filter(x=>x.id!==id); save(); render(); toast("Spieler gelöscht");
+}
+/* ---- Stunden-Editor (Sheet) ---- */
+let _lessonDraft=null;
+function defaultParticipant(){ const first=(S.players||[])[0]; return {playerId:first?first.id:"", price:first?(first.rate||0):0, method:"Offen"}; }
+function openLesson(id, presetDate, presetHour){
+  const existing = id ? (S.lessons||[]).find(l=>l.id===id) : null;
+  _lessonDraft = existing ? JSON.parse(JSON.stringify(existing)) : {
+    id:uid(), date:presetDate||todayStr(), time:(presetHour!=null?String(presetHour).padStart(2,"0")+":00":"17:00"),
+    durationMin:60, title:"", participants:[defaultParticipant()], _new:true };
+  const tt=$("#lessonTitle"); if(tt) tt.textContent = existing?"Stunde bearbeiten":"Stunde erfassen";
+  renderLessonEditor();
+  $("#lessonSheet").classList.add("open");
+}
+function _partOptions(sel){ return `<option value="">— Spieler wählen —</option>`+[...(S.players||[])].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${p.id}" ${p.id===sel?"selected":""}>${esc(p.name)} · ${playerCredit(p.id)} Std</option>`).join(""); }
+function partRow(pt,i){
+  return `<div class="part-row" data-pi="${i}">
+    <select data-pf="playerId">${_partOptions(pt.playerId)}</select>
+    <input type="number" min="0" step="1" data-pf="price" value="${pt.price!=null&&pt.price!==""?pt.price:""}" placeholder="€">
+    <select data-pf="method">${PAY_METHODS.map(m=>`<option value="${m}" ${pt.method===m?"selected":""}>${m}</option>`).join("")}</select>
+    <button class="btn ghost sm" data-prem="${i}" title="Teilnehmer entfernen">✕</button>
+  </div>`;
+}
+function renderLessonEditor(){
+  const d=_lessonDraft; const body=$("#lessonBody"); if(!body) return;
+  const noPlayers=!(S.players||[]).length;
+  body.innerHTML=`
+    <div class="grid2">
+      <div class="field"><label>Datum</label><input type="date" id="lsDate" value="${d.date}"></div>
+      <div class="field"><label>Uhrzeit</label><input type="time" id="lsTime" value="${d.time}"></div>
+      <div class="field"><label>Dauer</label><select id="lsDur">
+        ${[30,45,60,90,120].map(m=>`<option value="${m}" ${d.durationMin===m?"selected":""}>${m} Min${m%60===0?` (${m/60} Std)`:""}</option>`).join("")}
+      </select></div>
+      <div class="field"><label>Titel / Art</label><input id="lsTitle" value="${esc(d.title||"")}" placeholder="z.B. Einzel, Gruppe, Kids"></div>
+    </div>
+    ${noPlayers?`<div class="tiny muted" style="margin:6px 0">Noch keine Spieler angelegt – im Reiter „👥 Spieler" anlegen, dann hier zuordnen.</div>`:""}
+    <div style="margin-top:6px"><label class="tiny muted">Teilnehmer · Preis · Zahlart (Guthaben zieht automatisch ${lessonHours(d)} Std ab)</label>
+      <div id="lsParts">${(d.participants||[]).map((pt,i)=>partRow(pt,i)).join("")}</div>
+      <button class="btn sec sm" id="lsAddPart" style="margin-top:6px">＋ Teilnehmer</button>
+    </div>
+    <div class="row" style="gap:8px; margin-top:16px">
+      ${d._new?"":`<button class="btn danger" id="lsDelete">Löschen</button>`}
+      <button class="btn grow" id="lsSave">Speichern</button>
+    </div>`;
+  bindLessonEditor();
+}
+function _collectLesson(){
+  const d=_lessonDraft;
+  d.date=$("#lsDate").value||d.date; d.time=$("#lsTime").value||d.time;
+  d.durationMin=+$("#lsDur").value||60; d.title=$("#lsTitle").value.trim();
+  const parts=[];
+  $("#lsParts").querySelectorAll(".part-row").forEach(row=>{
+    const pid=row.querySelector('[data-pf="playerId"]').value;
+    const price=parseFloat(row.querySelector('[data-pf="price"]').value)||0;
+    const method=row.querySelector('[data-pf="method"]').value||"Offen";
+    parts.push({playerId:pid, price, method});
+  });
+  d.participants=parts;
+}
+function bindLessonEditor(){
+  const d=_lessonDraft;
+  $("#lsAddPart").onclick=()=>{ _collectLesson(); d.participants.push(defaultParticipant()); renderLessonEditor(); };
+  $("#lsParts").querySelectorAll("[data-prem]").forEach(b=>b.onclick=()=>{ _collectLesson(); d.participants.splice(+b.dataset.prem,1); renderLessonEditor(); });
+  $("#lsParts").querySelectorAll('[data-pf="playerId"]').forEach(sel=>sel.onchange=()=>{ _collectLesson(); const i=+sel.closest(".part-row").dataset.pi; const p=playerById(sel.value); if(p && !d.participants[i].price) d.participants[i].price=p.rate||0; renderLessonEditor(); });
+  const del=$("#lsDelete"); if(del) del.onclick=async ()=>{ if(!await uiConfirm("Diese Stunde löschen?","Löschen")) return; tombstone("lessons",d.id); S.lessons=S.lessons.filter(l=>l.id!==d.id); closeLesson(); save(); render(); toast("Stunde gelöscht"); };
+  $("#lsSave").onclick=()=>{ _collectLesson(); d.participants=d.participants.filter(pt=>pt.playerId); saveLesson(); };
+}
+function saveLesson(){
+  const d=_lessonDraft; const isNew=!!d._new; delete d._new; d.updatedAt=Date.now();
+  const ex=(S.lessons||[]).find(l=>l.id===d.id);
+  if(ex) Object.assign(ex,d); else { d.createdAt=todayStr(); S.lessons.unshift(d); }
+  closeLesson(); save(); render(); toast("Stunde gespeichert ✓");
+}
+function closeLesson(){ const s=$("#lessonSheet"); if(s) s.classList.remove("open"); _lessonDraft=null; }
+
 $("#fab").onclick=()=>{ $("#chatSheet").classList.add("open"); renderChat(); setTimeout(()=>$("#chatInput").focus(),100); };
 $("#chatClose").onclick=()=>$("#chatSheet").classList.remove("open");
 $("#chatSheet").onclick=e=>{ if(e.target.id==="chatSheet") $("#chatSheet").classList.remove("open"); };
@@ -2596,7 +2839,7 @@ function syncApiURL(){ const b=(S.sync&&S.sync.apiBase&&S.sync.apiBase.trim())||
 function stateWeight(s){ if(!s) return 0; return (s.todos?s.todos.length:0)+(s.goals?s.goals.length:0)+(s.bookmarks?s.bookmarks.length:0)+(s.ideas?s.ideas.length:0)+(s.wishes?s.wishes.length:0)+(s.myThoughts?s.myThoughts.length:0)+(s.thoughts?s.thoughts.length:0)+(s.mindAnswers?Object.keys(s.mindAnswers).length:0)+(s.mood?Object.keys(s.mood).length:0)+(s.areas&&s.areas.length>2?s.areas.length-2:0); }
 
 /* ---- Zusammenführung (Merge) auf Eintrags-Ebene ---- */
-const LIST_COLLS=["todos","goals","bookmarks","ideas","wishes","thoughts","myThoughts","areas","routines"];
+const LIST_COLLS=["todos","goals","bookmarks","ideas","wishes","thoughts","myThoughts","areas","routines","players","lessons"];
 const MAP_COLLS=["mindAnswers","mindDayQ","mindDayR","mindDayQuote","valuesDayQ","valuesAns","dayGoalLog"];
 function _itemTime(it){ return (it&&(it.updatedAt||0))||0; }
 function mergeList(localArr, remoteArr, localTomb, remoteTomb, tombAcc){
@@ -2831,6 +3074,8 @@ updateUndoBtns();
 $("#settingsBtn").onclick=()=>{ $("#settingsSheet").classList.add("open"); fillPinStatus(); };
 $("#settingsClose").onclick=()=>$("#settingsSheet").classList.remove("open");
 $("#settingsSheet").onclick=e=>{ if(e.target.id==="settingsSheet") $("#settingsSheet").classList.remove("open"); };
+$("#lessonClose").onclick=closeLesson;
+$("#lessonSheet").onclick=e=>{ if(e.target.id==="lessonSheet") closeLesson(); };
 $("#syncClose").onclick=()=>$("#syncSheet").classList.remove("open");
 $("#syncSheet").onclick=e=>{ if(e.target.id==="syncSheet") $("#syncSheet").classList.remove("open"); };
 $("#syncConnect").onclick=()=>syncConnect($("#syncPass").value,$("#syncApi").value);
@@ -2859,7 +3104,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.17";
+const APP_VERSION="2026-08-27.18";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
