@@ -754,7 +754,11 @@ function dailyDoneToday(t){ return !!(t.dailyLog && t.dailyLog[todayStr()]); }
 function dailyExpired(t){ return !!(t.daily && t.dailyUntil && todayStr()>t.dailyUntil); }
 function todoDone(t){ return t.daily ? (dailyExpired(t) || dailyDoneToday(t)) : !!t.done; }   // "erledigt" für Ansichten/Listen
 function todoOpen(t){ return !todoDone(t); }
-function todoDoneToday(t){ return t.daily ? dailyDoneToday(t) : (!!t.done && t.doneAt===todayStr()); }  // heute abgehakt?
+function todoDoneToday(t){   // heute abgehakt? (zählt fürs Tagesziel)
+  if(t.daily) return dailyDoneToday(t);
+  if(t.repeat && t.repeat.unit) return t.repeatLastDone===todayStr();  // Wiederkehrende: heute erledigt = zuletzt heute abgehakt
+  return (!!t.done && t.doneAt===todayStr());
+}
 function toggleTodo(id){
   const t=S.todos.find(x=>x.id===id); if(!t) return;
   if(t.daily){
@@ -1858,6 +1862,7 @@ function doneOnDate(date){
   let n=0;
   (S.todos||[]).forEach(t=>{
     if(t.daily){ if(t.dailyLog && t.dailyLog[date]) n++; }
+    else if(t.repeat && t.repeat.unit){ if(t.repeatLastDone===date) n++; }
     else if(t.done && t.doneAt===date) n++;
   });
   return n;
@@ -3108,7 +3113,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-01.20";
+const APP_VERSION="2026-09-01.21";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
