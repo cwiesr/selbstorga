@@ -535,6 +535,9 @@ function ensureState(){
     mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{},
     savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[], tabLabels:{}, dayGoalLog:{}, players:[], lessons:[],
     sync:{enabled:false, pass:"", apiBase:""} };
+  // Tagesziel jetzt geräteübergreifend (aus altem lokalem S.ui übernehmen)
+  if(S.ui){ if(S.dayGoal==null && S.ui.dayGoal!=null) S.dayGoal=S.ui.dayGoal; if(S.dayGoalManual==null && S.ui.dayGoalManual!=null) S.dayGoalManual=S.ui.dayGoalManual; }
+  if(S.dayGoal==null) S.dayGoal=5;
   for(const k in defs){ if(S[k]==null) S[k]=defs[k]; }
   if(S._rev==null) S._rev=0;
   if(!S.startDate) S.startDate=todayStr();
@@ -1245,8 +1248,8 @@ function viewOverview(){
   const savedNow=S.savedReminders.some(r=>r.text===remOv);
 
   const ovBoard=!!S.ui.ovBoard;
-  const dgGoal=Math.max(1, Math.min(20, S.ui.dayGoal||5));
-  const dgManual=(S.ui.dayGoalManual && S.ui.dayGoalManual.d===todayStr())?(S.ui.dayGoalManual.n||0):0;
+  const dgGoal=Math.max(1, Math.min(20, S.dayGoal||5));
+  const dgManual=(S.dayGoalManual && S.dayGoalManual.d===todayStr())?(S.dayGoalManual.n||0):0;
   const dgFilled=Math.min(dgGoal, Math.max(doneToday, dgManual));
   const dgCollapsed=!!S.ui.dayGoalCollapsed;
   let html=`<div class="row center" style="justify-content:space-between; flex-wrap:wrap; gap:6px">
@@ -1338,12 +1341,12 @@ function viewOverview(){
   const dgToggleFn=()=>{ S.ui.dayGoalCollapsed=!S.ui.dayGoalCollapsed; save(); render(); };
   const dgh=$("#dgHead"); if(dgh) dgh.onclick=(e)=>{ if(e.target.closest("button")&&e.target.id!=="dgToggle") return; dgToggleFn(); };
   const dgt=$("#dgToggle"); if(dgt) dgt.onclick=(e)=>{ e.stopPropagation(); dgToggleFn(); };
-  const dgm=$("#dgMinus"); if(dgm) dgm.onclick=(e)=>{ e.stopPropagation(); S.ui.dayGoal=Math.max(1,(S.ui.dayGoal||5)-1); save(); render(); };
-  const dgp=$("#dgPlus"); if(dgp) dgp.onclick=(e)=>{ e.stopPropagation(); S.ui.dayGoal=Math.min(20,(S.ui.dayGoal||5)+1); save(); render(); };
+  const dgm=$("#dgMinus"); if(dgm) dgm.onclick=(e)=>{ e.stopPropagation(); S.dayGoal=Math.max(1,(S.dayGoal||5)-1); save(); render(); };
+  const dgp=$("#dgPlus"); if(dgp) dgp.onclick=(e)=>{ e.stopPropagation(); S.dayGoal=Math.min(20,(S.dayGoal||5)+1); save(); render(); };
   v.querySelectorAll("[data-dg]").forEach(b=>b.onclick=()=>{
     const i=+b.dataset.dg;                                   // i-ter Kreis
     const manual=(dgFilled===i)?i-1:i;                        // gefüllten obersten wieder leeren, sonst bis i füllen
-    S.ui.dayGoalManual={d:todayStr(), n:Math.max(0,manual)};
+    S.dayGoalManual={d:todayStr(), n:Math.max(0,manual)};
     save(); render();
   });
   if(ovBoard) bindBoard(v);
@@ -1548,7 +1551,7 @@ function viewRoutines(){
     return n + ((t.done && t.doneAt && d7.includes(t.doneAt))?1:0);
   },0);
   // Tagesziel-Verlauf
-  const dgGoalNow=Math.max(1, Math.min(20, S.ui.dayGoal||5));
+  const dgGoalNow=Math.max(1, Math.min(20, S.dayGoal||5));
   const dgLog=S.dayGoalLog||{};
   const dgEntryOf=(iso)=> iso===today ? {done:doneOnDate(today), goal:dgGoalNow, live:true} : dgLog[iso];
   let dgStreak=0; { const st=new Date(); if(!(dgEntryOf(today)&&dgEntryOf(today).done>=dgEntryOf(today).goal)) st.setDate(st.getDate()-1);
@@ -1861,7 +1864,7 @@ function doneOnDate(date){
 }
 function captureDayGoal(){
   S.dayGoalLog=S.dayGoalLog||{};
-  const goal=Math.max(1, Math.min(20, S.ui.dayGoal||5));
+  const goal=Math.max(1, Math.min(20, S.dayGoal||5));
   let changed=false;
   // vergangene Tage (bis 14 zurück) mit Aktivität nachtragen, falls noch kein Eintrag
   for(let i=1;i<=14;i++){ const d=new Date(); d.setDate(d.getDate()-i); const iso=isoLocal(d);
@@ -3105,7 +3108,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-01.19";
+const APP_VERSION="2026-09-01.20";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
