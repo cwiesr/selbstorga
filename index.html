@@ -400,7 +400,8 @@
 /* ============================ STATE & PERSISTENCE ============================ */
 const KEY = "selbstorga.v1";
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
-const todayStr = () => new Date().toISOString().slice(0,10);
+const isoLocal = (d) => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const todayStr = () => isoLocal(new Date());   // lokales Datum (nicht UTC), sonst Datumsarithmetik um einen Tag verschoben
 
 const DEFAULT_ROUTINES = [
   {id:"r_workout", name:"Workout", icon:"🏋️"},
@@ -599,7 +600,7 @@ function daysUntil(iso){
   const a=new Date(todayStr()+"T00:00:00"), b=new Date(iso+"T00:00:00");
   return Math.round((b-a)/86400000);
 }
-function addDaysISO(iso, n){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function addDaysISO(iso, n){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n); return isoLocal(d); }
 function last(n){ const out=[]; let d=todayStr(); for(let i=0;i<n;i++){ out.unshift(d); d=addDaysISO(d,-1);} return out; }
 function areaById(id){ return S.areas.find(a=>a.id===id); }
 
@@ -735,7 +736,7 @@ function nextDue(currentISO, r){
   const base = currentISO ? new Date(currentISO+"T00:00:00") : today;
   let d=_stepDate(base, r);
   let g=0; while(d<=today && g++<600){ d=_stepDate(d, r); }
-  return d.toISOString().slice(0,10);
+  return isoLocal(d);
 }
 function repeatLabel(r){ if(!r||!r.unit) return "";
   const e=Math.max(1, r.every||1);
@@ -1111,8 +1112,8 @@ function donePanel(doneList, ctxKey, showArea){
     </button>`;
   if(open){
     const today=todayStr();
-    const y=new Date(); y.setDate(y.getDate()-1); const yest=y.toISOString().slice(0,10);
-    const d7=[]; for(let i=0;i<7;i++){ const d=new Date(); d.setDate(d.getDate()-i); d7.push(d.toISOString().slice(0,10)); }
+    const y=new Date(); y.setDate(y.getDate()-1); const yest=isoLocal(y);
+    const d7=[]; for(let i=0;i<7;i++){ const d=new Date(); d.setDate(d.getDate()-i); d7.push(isoLocal(d)); }
     const buckets=[["Heute",[]],["Gestern",[]],["Diese Woche",[]],["Älter",[]]];
     [...doneList].sort((a,b)=>String(doneDateOf(b)).localeCompare(String(doneDateOf(a)))).forEach(t=>{
       const dd=doneDateOf(t);
@@ -1551,8 +1552,8 @@ function viewRoutines(){
   const dgLog=S.dayGoalLog||{};
   const dgEntryOf=(iso)=> iso===today ? {done:doneOnDate(today), goal:dgGoalNow, live:true} : dgLog[iso];
   let dgStreak=0; { const st=new Date(); if(!(dgEntryOf(today)&&dgEntryOf(today).done>=dgEntryOf(today).goal)) st.setDate(st.getDate()-1);
-    for(let i=0;i<400;i++){ const iso=st.toISOString().slice(0,10); const e=(iso===today)?dgEntryOf(today):dgLog[iso]; if(e && e.done>=e.goal){ dgStreak++; st.setDate(st.getDate()-1);} else break; } }
-  const dgRows=[]; for(let i=0;i<14;i++){ const dd=new Date(); dd.setDate(dd.getDate()-i); const iso=dd.toISOString().slice(0,10); const e=dgEntryOf(iso); if(e) dgRows.push({iso, done:e.done, goal:e.goal, live:!!e.live}); }
+    for(let i=0;i<400;i++){ const iso=isoLocal(st); const e=(iso===today)?dgEntryOf(today):dgLog[iso]; if(e && e.done>=e.goal){ dgStreak++; st.setDate(st.getDate()-1);} else break; } }
+  const dgRows=[]; for(let i=0;i<14;i++){ const dd=new Date(); dd.setDate(dd.getDate()-i); const iso=isoLocal(dd); const e=dgEntryOf(iso); if(e) dgRows.push({iso, done:e.done, goal:e.goal, live:!!e.live}); }
 
   let html=`<div class="view-title">Routinen</div>
     <div class="view-sub">Deine privaten Ziele – dranbleiben zählt 🔥</div>
@@ -1863,7 +1864,7 @@ function captureDayGoal(){
   const goal=Math.max(1, Math.min(20, S.ui.dayGoal||5));
   let changed=false;
   // vergangene Tage (bis 14 zurück) mit Aktivität nachtragen, falls noch kein Eintrag
-  for(let i=1;i<=14;i++){ const d=new Date(); d.setDate(d.getDate()-i); const iso=d.toISOString().slice(0,10);
+  for(let i=1;i<=14;i++){ const d=new Date(); d.setDate(d.getDate()-i); const iso=isoLocal(d);
     if(!S.dayGoalLog[iso]){ const done=doneOnDate(iso); if(done>0){ S.dayGoalLog[iso]={done, goal, ts:Date.now()}; changed=true; } } }
   // heute erst ab 22:00 festhalten
   const now=new Date();
@@ -2625,8 +2626,8 @@ function playerTopups(pid){ const p=playerById(pid); if(!p||!p.topups) return 0;
 function playerUsedCredit(pid){ let h=0; (S.lessons||[]).forEach(l=>{ (l.participants||[]).forEach(pt=>{ if(pt.playerId===pid && pt.method==="Guthaben") h+=lessonHours(l); }); }); return h; }
 function playerCredit(pid){ return Math.round((playerTopups(pid)-playerUsedCredit(pid))*100)/100; }
 function isPaid(pt){ return !!(pt && pt.method && pt.method!=="Offen"); }   // "Offen" = noch nicht bezahlt
-function mondayOf(iso){ const d=new Date(iso+"T00:00:00"); const wd=(d.getDay()+6)%7; d.setDate(d.getDate()-wd); return d.toISOString().slice(0,10); }
-function addDaysIso(iso,n){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function mondayOf(iso){ const d=new Date(iso+"T00:00:00"); const wd=(d.getDay()+6)%7; d.setDate(d.getDate()-wd); return isoLocal(d); }
+function addDaysIso(iso,n){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n); return isoLocal(d); }
 function hoursWeekStart(){ return mondayOf(S.ui.hoursWeek || todayStr()); }  // immer auf den Montag normalisieren
 
 function viewHours(){
