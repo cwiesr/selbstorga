@@ -99,6 +99,13 @@
     color:var(--muted2); font-size:20px; line-height:1; display:grid; place-items:center; cursor:pointer; transition:.12s}
   .daygoal-dot.on{background:var(--good); border-color:var(--good); color:#fff}
   .daygoal-dot:active{transform:scale(.92)}
+  /* Übersicht: Tagesziel neben Schnell-Eingabe (Desktop), gestapelt (Mobil) */
+  .ov-row{display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap}
+  .ov-row > .card{flex:1 1 300px; margin:0}
+  /* Tagesziel-Verlauf in Routinen */
+  .dgbar{display:flex; align-items:center; gap:8px; padding:5px 0}
+  .dgbar-track{flex:1 1 auto; height:8px; border-radius:6px; background:var(--panel2); overflow:hidden}
+  .dgbar-fill{height:100%; background:var(--good)}
   .todo[data-board]{cursor:grab}
   .todo[data-board].dragging{opacity:.45}
   .drag-h{flex:0 0 auto; color:var(--muted2); cursor:grab; font-size:16px; line-height:1; padding:2px 2px 0; user-select:none}
@@ -494,7 +501,7 @@ function save(){
 function ensureState(){
   const defs={ mindAnswers:{}, mindDayQ:{}, mindDayR:{}, mindDayQuote:{}, mindAskedQ:[], mindAskedR:[],
     mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{},
-    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[], tabLabels:{},
+    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[], tabLabels:{}, dayGoalLog:{},
     sync:{enabled:false, pass:"", apiBase:""} };
   for(const k in defs){ if(S[k]==null) S[k]=defs[k]; }
   if(S._rev==null) S._rev=0;
@@ -1236,6 +1243,7 @@ function viewOverview(){
         </div>`).join("")}</div>`:""}
     </div>
 
+    <div class="ov-row">
     <div class="card">
       <div class="row center" style="justify-content:space-between; gap:8px; cursor:pointer" id="dgHead">
         <div class="row center" style="gap:8px"><b>🎯 Tagesziel</b><span class="tiny muted">${dgFilled}/${dgGoal} erledigt</span></div>
@@ -1264,6 +1272,7 @@ function viewOverview(){
         <button class="btn" id="qaddBtn" style="align-self:flex-end">Hinzufügen</button>
       </div>
       <div class="tiny muted" style="margin-top:8px">Landet als wichtiges To-do im Eingang. Für mehr Details → Chat 💬</div>
+    </div>
     </div>`;
 
   // Zeit-Abschnitte: Heute · Morgen · Ab Übermorgen (überfällige zählen zu „Heute")
@@ -1504,6 +1513,13 @@ function viewRoutines(){
     if(t.daily) return n + (t.dailyLog?Object.keys(t.dailyLog).filter(d=>t.dailyLog[d] && d7.includes(d)).length:0);
     return n + ((t.done && t.doneAt && d7.includes(t.doneAt))?1:0);
   },0);
+  // Tagesziel-Verlauf
+  const dgGoalNow=Math.max(1, Math.min(20, S.ui.dayGoal||5));
+  const dgLog=S.dayGoalLog||{};
+  const dgEntryOf=(iso)=> iso===today ? {done:doneOnDate(today), goal:dgGoalNow, live:true} : dgLog[iso];
+  let dgStreak=0; { const st=new Date(); if(!(dgEntryOf(today)&&dgEntryOf(today).done>=dgEntryOf(today).goal)) st.setDate(st.getDate()-1);
+    for(let i=0;i<400;i++){ const iso=st.toISOString().slice(0,10); const e=(iso===today)?dgEntryOf(today):dgLog[iso]; if(e && e.done>=e.goal){ dgStreak++; st.setDate(st.getDate()-1);} else break; } }
+  const dgRows=[]; for(let i=0;i<14;i++){ const dd=new Date(); dd.setDate(dd.getDate()-i); const iso=dd.toISOString().slice(0,10); const e=dgEntryOf(iso); if(e) dgRows.push({iso, done:e.done, goal:e.goal, live:!!e.live}); }
 
   let html=`<div class="view-title">Routinen</div>
     <div class="view-sub">Deine privaten Ziele – dranbleiben zählt 🔥</div>
@@ -1519,6 +1535,17 @@ function viewRoutines(){
           <div class="muted small">🔥 Streak: <b style="color:var(--good)">${streak}</b> Tag(e) ≥ 60%</div>
         </div>
       </div>
+    </div>
+
+    <div class="card">
+      <div class="row center" style="justify-content:space-between"><h3 style="margin:0">🎯 Tagesziel</h3>
+        <span class="tiny muted">🔥 ${dgStreak} Tag(e) erreicht</span></div>
+      <div class="muted small" style="margin:6px 0 10px">Heute: <b>${doneOnDate(today)}/${dgGoalNow}</b> ${doneOnDate(today)>=dgGoalNow?"✓ geschafft":""} · wird täglich um 22 Uhr festgehalten.</div>
+      ${dgRows.length ? dgRows.map(r=>{ const pct=Math.min(100, Math.round(r.done/r.goal*100)); const reached=r.done>=r.goal;
+        return `<div class="dgbar"><span class="tiny muted" style="width:82px; flex:0 0 auto">${r.live?"Heute":fmtDate(r.iso)}</span>
+          <span class="dgbar-track"><span class="dgbar-fill" style="width:${pct}%;${reached?"":"background:var(--warn)"}"></span></span>
+          <span class="tiny" style="width:56px; flex:0 0 auto; text-align:right; ${reached?"color:var(--good)":""}">${r.done}/${r.goal}${reached?" ✓":""}</span></div>`;
+        }).join("") : `<div class="tiny muted">Noch keine Einträge – ab heute 22 Uhr geht's los.</div>`}
     </div>
 
     <div class="card">
@@ -1788,6 +1815,28 @@ function mindReminder(date){
   if(S.mindDayR[date]) return S.mindDayR[date];
   const p=pickNonRepeating(reminderBank(), S.mindDayR, date);
   S.mindDayR[date]=p; S.mindAskedR.push(p); save(); return p;
+}
+/* --- Tagesziel: Erreichung täglich (ab 22 Uhr) in die Routinen/Historie übertragen --- */
+function doneOnDate(date){
+  let n=0;
+  (S.todos||[]).forEach(t=>{
+    if(t.daily){ if(t.dailyLog && t.dailyLog[date]) n++; }
+    else if(t.done && t.doneAt===date) n++;
+  });
+  return n;
+}
+function captureDayGoal(){
+  S.dayGoalLog=S.dayGoalLog||{};
+  const goal=Math.max(1, Math.min(20, S.ui.dayGoal||5));
+  let changed=false;
+  // vergangene Tage (bis 14 zurück) mit Aktivität nachtragen, falls noch kein Eintrag
+  for(let i=1;i<=14;i++){ const d=new Date(); d.setDate(d.getDate()-i); const iso=d.toISOString().slice(0,10);
+    if(!S.dayGoalLog[iso]){ const done=doneOnDate(iso); if(done>0){ S.dayGoalLog[iso]={done, goal, ts:Date.now()}; changed=true; } } }
+  // heute erst ab 22:00 festhalten
+  const now=new Date();
+  if(now.getHours()>=22){ const today=todayStr(); if(!S.dayGoalLog[today]){ S.dayGoalLog[today]={done:doneOnDate(today), goal, ts:Date.now()}; changed=true; } }
+  if(changed) save();
+  return changed;
 }
 function rerollReminder(){
   const d=todayStr(); const cur=S.mindDayR[d];
@@ -2548,7 +2597,7 @@ function stateWeight(s){ if(!s) return 0; return (s.todos?s.todos.length:0)+(s.g
 
 /* ---- Zusammenführung (Merge) auf Eintrags-Ebene ---- */
 const LIST_COLLS=["todos","goals","bookmarks","ideas","wishes","thoughts","myThoughts","areas","routines"];
-const MAP_COLLS=["mindAnswers","mindDayQ","mindDayR","mindDayQuote","valuesDayQ","valuesAns"];
+const MAP_COLLS=["mindAnswers","mindDayQ","mindDayR","mindDayQuote","valuesDayQ","valuesAns","dayGoalLog"];
 function _itemTime(it){ return (it&&(it.updatedAt||0))||0; }
 function mergeList(localArr, remoteArr, localTomb, remoteTomb, tombAcc){
   const tomb={};
@@ -2797,11 +2846,12 @@ $("#pinSet").onclick=async ()=>{ const inp=$("#pinInput"); const ok=await setPin
 $("#pinClear").onclick=()=>{ clearPin(); const st=$("#pinStatus"); if(st){ st.textContent="Kein PIN gesetzt"; st.style.color="var(--muted)"; } toast("PIN entfernt"); };
 $("#lockGo").onclick=tryUnlock;
 $("#lockPin").addEventListener("keydown",e=>{ if(e.key==="Enter") tryUnlock(); });
-if(document.addEventListener) document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ lockCheck(); syncAutoPull(true); } });
+if(document.addEventListener) document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ lockCheck(); syncAutoPull(true); if(captureDayGoal()) render(); } });
 if(window.addEventListener) window.addEventListener("focus",()=>{ syncAutoPull(true); });
-setInterval(()=>{ if(!document.hidden) syncAutoPull(); }, 30000);
+setInterval(()=>{ if(!document.hidden){ syncAutoPull(); if(captureDayGoal()) render(); } }, 30000);
 updateSyncBtn();
 lockCheck();
+captureDayGoal();
 if(S.sync&&S.sync.enabled&&S.sync.pass){ (async()=>{ try{ const pr=await syncPull(); if(pr.status==="pulled") render(); else await syncPush(); }catch(e){} })(); }
 if(!SPECIALS_LEFT.some(s=>s.k===S.ui.active) && !SPECIALS_RIGHT.some(s=>s.k===S.ui.active)
    && !(S.ui.active||"").startsWith("area:")) S.ui.active="overview";
@@ -2809,7 +2859,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.16";
+const APP_VERSION="2026-08-27.17";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
