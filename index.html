@@ -2627,7 +2627,7 @@ function playerCredit(pid){ return Math.round((playerTopups(pid)-playerUsedCredi
 function isPaid(pt){ return !!(pt && pt.method && pt.method!=="Offen"); }   // "Offen" = noch nicht bezahlt
 function mondayOf(iso){ const d=new Date(iso+"T00:00:00"); const wd=(d.getDay()+6)%7; d.setDate(d.getDate()-wd); return d.toISOString().slice(0,10); }
 function addDaysIso(iso,n){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
-function hoursWeekStart(){ if(!S.ui.hoursWeek) S.ui.hoursWeek=mondayOf(todayStr()); return S.ui.hoursWeek; }
+function hoursWeekStart(){ return mondayOf(S.ui.hoursWeek || todayStr()); }  // immer auf den Montag normalisieren
 
 function viewHours(){
   const tab=S.ui.hoursTab=S.ui.hoursTab||"kal";
@@ -2656,7 +2656,7 @@ function lessonChip(l){
 function hoursCalendarHTML(){
   const ws=hoursWeekStart();
   const days=Array.from({length:7},(_,i)=>addDaysIso(ws,i));
-  const today=todayStr(); const wd=["Mo","Di","Mi","Do","Fr","Sa","So"];
+  const today=todayStr();
   let h=`<div class="row center" style="justify-content:space-between; gap:8px; margin-bottom:10px; flex-wrap:wrap">
     <div class="row center" style="gap:6px">
       <button class="btn ghost sm" data-wk="-1">‹</button>
@@ -2667,7 +2667,7 @@ function hoursCalendarHTML(){
     <button class="btn sm" data-newlesson="1">＋ Stunde erfassen</button>
   </div>`;
   h+=`<div class="hcal-wrap"><div class="hcal"><div class="hc hc-head"></div>`;
-  days.forEach((d,i)=>{ const dd=new Date(d+"T00:00:00"); h+=`<div class="hc hc-head ${d===today?"today":""}">${wd[i]} ${dd.getDate()}.${dd.getMonth()+1}.</div>`; });
+  days.forEach((d)=>{ const dd=new Date(d+"T00:00:00"); h+=`<div class="hc hc-head ${d===today?"today":""}">${WDS[dd.getDay()]} ${dd.getDate()}.${dd.getMonth()+1}.</div>`; });
   for(let hr=7; hr<=21; hr++){
     h+=`<div class="hc hc-time">${hr}:00</div>`;
     days.forEach(d=>{
@@ -2726,7 +2726,7 @@ function hoursUnpaidHTML(){
   return h;
 }
 function bindHours(root){
-  root.querySelectorAll("[data-wk]").forEach(b=>b.onclick=()=>{ const v=+b.dataset.wk; S.ui.hoursWeek = v===0 ? mondayOf(todayStr()) : addDaysIso(hoursWeekStart(), v*7); save(); render(); });
+  root.querySelectorAll("[data-wk]").forEach(b=>b.onclick=()=>{ const v=+b.dataset.wk; S.ui.hoursWeek = v===0 ? mondayOf(todayStr()) : mondayOf(addDaysIso(hoursWeekStart(), v*7)); save(); render(); });
   root.querySelectorAll("[data-newlesson]").forEach(b=>b.onclick=()=>openLesson(null));
   root.querySelectorAll("[data-slot]").forEach(el=>el.onclick=(e)=>{ if(e.target.closest("[data-lesson]")) return; const [d,hr]=el.dataset.slot.split("|"); openLesson(null,d,hr); });
   root.querySelectorAll("[data-lesson]").forEach(el=>el.onclick=(e)=>{ e.stopPropagation(); openLesson(el.dataset.lesson); });
@@ -3104,7 +3104,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.18";
+const APP_VERSION="2026-09-01.19";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
