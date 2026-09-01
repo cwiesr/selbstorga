@@ -93,6 +93,12 @@
   .ovsec-head{margin:18px 0 10px; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
   .ovsec-title{font-size:19px; font-weight:750; border-bottom:2px solid var(--accent); padding-bottom:2px}
   hr.ovsep{border:none; border-top:1px solid var(--border); margin:16px 0 2px}
+  /* Tagesziel-Kreise */
+  .daygoal-dots{display:flex; flex-wrap:wrap; gap:10px}
+  .daygoal-dot{width:40px; height:40px; border-radius:50%; border:2px solid var(--muted2); background:transparent;
+    color:var(--muted2); font-size:20px; line-height:1; display:grid; place-items:center; cursor:pointer; transition:.12s}
+  .daygoal-dot.on{background:var(--good); border-color:var(--good); color:#fff}
+  .daygoal-dot:active{transform:scale(.92)}
   .todo[data-board]{cursor:grab}
   .todo[data-board].dragging{opacity:.45}
   .drag-h{flex:0 0 auto; color:var(--muted2); cursor:grab; font-size:16px; line-height:1; padding:2px 2px 0; user-select:none}
@@ -1198,6 +1204,10 @@ function viewOverview(){
   const savedNow=S.savedReminders.some(r=>r.text===remOv);
 
   const ovBoard=!!S.ui.ovBoard;
+  const dgGoal=Math.max(1, Math.min(20, S.ui.dayGoal||5));
+  const dgManual=(S.ui.dayGoalManual && S.ui.dayGoalManual.d===todayStr())?(S.ui.dayGoalManual.n||0):0;
+  const dgFilled=Math.min(dgGoal, Math.max(doneToday, dgManual));
+  const dgCollapsed=!!S.ui.dayGoalCollapsed;
   let html=`<div class="row center" style="justify-content:space-between; flex-wrap:wrap; gap:6px">
       <div class="view-title">Übersicht</div>
       <div class="row" style="gap:4px; flex-wrap:wrap">
@@ -1224,6 +1234,25 @@ function viewOverview(){
           <div class="grow small">${esc(r.text)}<div class="tiny muted" style="margin-top:2px">${fmtDate(r.ts)}</div></div>
           <button class="btn ghost sm" data-remdel="${i}" title="Entfernen">✕</button>
         </div>`).join("")}</div>`:""}
+    </div>
+
+    <div class="card">
+      <div class="row center" style="justify-content:space-between; gap:8px; cursor:pointer" id="dgHead">
+        <div class="row center" style="gap:8px"><b>🎯 Tagesziel</b><span class="tiny muted">${dgFilled}/${dgGoal} erledigt</span></div>
+        <button class="btn ghost sm" id="dgToggle">${dgCollapsed?"▾ ausklappen":"▴ einklappen"}</button>
+      </div>
+      <div id="dgBody" style="${dgCollapsed?"display:none":"margin-top:10px"}">
+        <div class="daygoal-dots">${Array.from({length:dgGoal},(_,i)=>{const on=i<dgFilled;return `<button class="daygoal-dot ${on?"on":""}" data-dg="${i+1}" title="${i+1}. To-do">${on?"●":"○"}</button>`;}).join("")}</div>
+        <div class="row center" style="justify-content:space-between; margin-top:10px; gap:8px">
+          <span class="tiny muted">${dgFilled>=dgGoal?"Geschafft! 🎉":`Noch ${dgGoal-dgFilled} bis zum Tagesziel`}</span>
+          <span class="row center" style="gap:6px">
+            <span class="tiny muted">Ziel</span>
+            <button class="btn ghost sm" id="dgMinus" title="weniger">−</button>
+            <b style="min-width:18px; text-align:center">${dgGoal}</b>
+            <button class="btn ghost sm" id="dgPlus" title="mehr">＋</button>
+          </span>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -1262,6 +1291,18 @@ function viewOverview(){
 
   const v=$("#view"); v.innerHTML=html; bindTodos(v); bindDone(v);
   $("#ovBoardToggle").onclick=()=>{ S.ui.ovBoard=!S.ui.ovBoard; save(); render(); };
+  // Tagesziel
+  const dgToggleFn=()=>{ S.ui.dayGoalCollapsed=!S.ui.dayGoalCollapsed; save(); render(); };
+  const dgh=$("#dgHead"); if(dgh) dgh.onclick=(e)=>{ if(e.target.closest("button")&&e.target.id!=="dgToggle") return; dgToggleFn(); };
+  const dgt=$("#dgToggle"); if(dgt) dgt.onclick=(e)=>{ e.stopPropagation(); dgToggleFn(); };
+  const dgm=$("#dgMinus"); if(dgm) dgm.onclick=(e)=>{ e.stopPropagation(); S.ui.dayGoal=Math.max(1,(S.ui.dayGoal||5)-1); save(); render(); };
+  const dgp=$("#dgPlus"); if(dgp) dgp.onclick=(e)=>{ e.stopPropagation(); S.ui.dayGoal=Math.min(20,(S.ui.dayGoal||5)+1); save(); render(); };
+  v.querySelectorAll("[data-dg]").forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.dg;                                   // i-ter Kreis
+    const manual=(dgFilled===i)?i-1:i;                        // gefüllten obersten wieder leeren, sonst bis i füllen
+    S.ui.dayGoalManual={d:todayStr(), n:Math.max(0,manual)};
+    save(); render();
+  });
   if(ovBoard) bindBoard(v);
   const q=$("#qadd"), qb=$("#qaddBtn");
   const doQ=()=>{ const val=q.value.trim(); if(!val) return;
@@ -2768,7 +2809,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-08-27.15";
+const APP_VERSION="2026-08-27.16";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
