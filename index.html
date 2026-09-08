@@ -104,7 +104,10 @@
   .ov-row > .card{flex:1 1 300px; margin:0}
   .ov-top{display:grid; grid-template-columns:1fr; gap:12px; margin-bottom:12px}
   .ov-top > .card{margin:0}
-  @media(min-width:820px){ .ov-top{grid-template-columns:1fr 1fr 1fr; align-items:start} }
+  /* Desktop: volle Fensterbreite nutzen (aus der 760px-Spalte ausbrechen) */
+  @media(min-width:820px){ .ov-top{grid-template-columns:1fr 1fr 1fr; align-items:start;
+    width:calc(100vw - 28px); margin-left:calc(50% - 50vw + 14px)}
+    .spr-card{width:calc(100vw - 28px); margin-left:calc(50% - 50vw + 14px)} }
   /* 6-Wochen-Thema */
   .spr-stat{display:flex; gap:16px; flex-wrap:wrap; margin:8px 0}
   .spr-stat .n{font-size:20px; font-weight:750}
@@ -1304,7 +1307,7 @@ function sprintCardHTML(){
   const sp=activeSprint();
   const collapsed=!!S.ui.sprintCollapsed;
   if(!sp){
-    return `<div class="card"><div class="row center" style="justify-content:space-between"><h3 style="margin:0">🎯 6-Wochen-Thema</h3>
+    return `<div class="card spr-card"><div class="row center" style="justify-content:space-between"><h3 style="margin:0">🎯 6-Wochen-Thema</h3>
       <button class="btn sm" id="sprNew">＋ Thema starten</button></div>
       <div class="tiny muted" style="margin-top:6px">Setz dir ein Thema für die nächsten 6 Wochen, teile es in Unterziele mit %-Anteil und tracke Zeit &amp; Fortschritt.</div></div>`;
   }
@@ -1315,7 +1318,7 @@ function sprintCardHTML(){
   const subs=(sp.subgoals||[]);
   const pctSum=subs.reduce((s,g)=>s+(+g.pct||0),0);
   const entries=[...(sp.entries||[])].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,8);
-  return `<div class="card">
+  return `<div class="card spr-card">
     <div class="row center" style="justify-content:space-between; gap:8px; cursor:pointer" id="sprHead">
       <div class="grow" style="min-width:0"><b>🎯 ${esc(sp.title)}</b>
         <div class="tiny muted">${dayNo>0?`Tag ${Math.min(dayNo,SPRINT_DAYS)}/${SPRINT_DAYS}`:"startet "+fmtDate(sp.startDate)} · noch ${left} Tage · ${pct}% erreicht</div></div>
@@ -3270,7 +3273,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-08.23";
+const APP_VERSION="2026-09-08.24";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
