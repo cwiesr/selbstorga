@@ -117,6 +117,9 @@
   .spr-sub .check{flex:0 0 auto}
   .spr-chart{width:100%; height:150px; display:block; background:var(--panel2); border:1px solid var(--border); border-radius:10px}
   .spr-entry{display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid var(--border); font-size:13px}
+  .spr-subtodos{padding:2px 0 8px 30px}
+  .spr-subtodo{display:flex; align-items:center; gap:8px; padding:3px 0; font-size:13px}
+  .check.sm{width:18px; height:18px; font-size:11px; border-radius:5px}
   /* Tagesziel-Verlauf in Routinen */
   .dgbar{display:flex; align-items:center; gap:8px; padding:5px 0}
   .dgbar-track{flex:1 1 auto; height:8px; border-radius:6px; background:var(--panel2); overflow:hidden}
@@ -1336,12 +1339,24 @@ function sprintCardHTML(){
         <b class="grow">Unterziele</b>
         <span class="tiny muted">${pctSum}% verteilt${pctSum!==100?" (Ziel: 100%)":""}</span>
       </div>
-      <div>${subs.length?subs.map(g=>`<div class="spr-sub">
+      <div>${subs.length?subs.map(g=>{
+        const gt=g.todos||[]; const gdone=gt.filter(t=>t.done).length;
+        return `<div class="spr-sub">
         <button class="check ${g.done?"on":""}" data-sprsub="${g.id}">${g.done?"✓":""}</button>
-        <span class="grow ${g.done?"":""}" style="${g.done?"text-decoration:line-through;opacity:.65":""}">${esc(g.title)}</span>
+        <span class="grow" style="${g.done?"text-decoration:line-through;opacity:.65":""}">${esc(g.title)}</span>
+        ${gt.length?`<span class="tiny muted">${gdone}/${gt.length}</span>`:""}
         <span class="tiny muted">${g.pct||0}%</span>
         <button class="btn ghost sm" data-sprsubdel="${g.id}" title="Entfernen">✕</button>
-      </div>`).join(""):`<div class="tiny muted" style="padding:4px 0">Noch keine Unterziele.</div>`}</div>
+      </div>
+      <div class="spr-subtodos">
+        ${gt.map(t=>`<div class="spr-subtodo">
+          <button class="check sm ${t.done?"on":""}" data-sprtdo="${g.id}|${t.id}">${t.done?"✓":""}</button>
+          <span class="grow" style="${t.done?"text-decoration:line-through;opacity:.6":""}">${esc(t.title)}</span>
+          <button class="btn ghost sm" data-sprtdel="${g.id}|${t.id}" title="Entfernen">✕</button>
+        </div>`).join("")}
+        <div class="row" style="gap:6px; margin-top:2px"><input class="grow" data-sprtnew="${g.id}" placeholder="＋ To-do hinzufügen…" autocomplete="off"><button class="btn sm" data-sprtadd="${g.id}">＋</button></div>
+      </div>`;
+      }).join(""):`<div class="tiny muted" style="padding:4px 0">Noch keine Unterziele.</div>`}</div>
       <div class="part-row" style="grid-template-columns:1fr 76px auto; margin-top:8px">
         <input id="sprSubTitle" placeholder="Neues Unterziel…" autocomplete="off">
         <input id="sprSubPct" type="number" min="0" max="100" placeholder="% Anteil">
@@ -1384,8 +1399,17 @@ function bindSprint(root){
   const tb=root.querySelector("#sprToggle"); if(tb) tb.onclick=(e)=>{ e.stopPropagation(); tg(); };
   const eb=root.querySelector("#sprEdit"); if(eb) eb.onclick=(e)=>{ e.stopPropagation(); sprintEdit(sp); };
   const ab=root.querySelector("#sprArchive"); if(ab) ab.onclick=async (e)=>{ e.stopPropagation(); if(!await uiConfirm("Thema abschließen und archivieren?","Abschließen")) return; sp.archived=true; sp.updatedAt=Date.now(); save(); render(); toast("Thema abgeschlossen ✓"); };
-  root.querySelectorAll("[data-sprsub]").forEach(b=>b.onclick=()=>{ const g=(sp.subgoals||[]).find(x=>x.id===b.dataset.sprsub); if(!g) return; g.done=!g.done; g.doneAt=g.done?todayStr():null; sp.updatedAt=Date.now(); save(); render(); });
+  const _recompSub=(g)=>{ if(g.todos&&g.todos.length){ const all=g.todos.every(t=>t.done); g.done=all; g.doneAt=all?(g.doneAt||todayStr()):null; } };
+  root.querySelectorAll("[data-sprsub]").forEach(b=>b.onclick=()=>{ const g=(sp.subgoals||[]).find(x=>x.id===b.dataset.sprsub); if(!g) return;
+    if(g.todos&&g.todos.length){ const all=g.todos.every(t=>t.done); g.todos.forEach(t=>t.done=!all); _recompSub(g); }
+    else { g.done=!g.done; g.doneAt=g.done?todayStr():null; }
+    sp.updatedAt=Date.now(); save(); render(); });
   root.querySelectorAll("[data-sprsubdel]").forEach(b=>b.onclick=()=>{ sp.subgoals=(sp.subgoals||[]).filter(x=>x.id!==b.dataset.sprsubdel); sp.updatedAt=Date.now(); save(); render(); });
+  // To-dos je Unterziel
+  root.querySelectorAll("[data-sprtdo]").forEach(b=>b.onclick=()=>{ const [gid,tid]=b.dataset.sprtdo.split("|"); const g=(sp.subgoals||[]).find(x=>x.id===gid); const t=g&&(g.todos||[]).find(x=>x.id===tid); if(!t) return; t.done=!t.done; _recompSub(g); sp.updatedAt=Date.now(); save(); render(); });
+  root.querySelectorAll("[data-sprtdel]").forEach(b=>b.onclick=()=>{ const [gid,tid]=b.dataset.sprtdel.split("|"); const g=(sp.subgoals||[]).find(x=>x.id===gid); if(!g) return; g.todos=(g.todos||[]).filter(x=>x.id!==tid); _recompSub(g); sp.updatedAt=Date.now(); save(); render(); });
+  root.querySelectorAll("[data-sprtadd]").forEach(b=>b.onclick=()=>{ const gid=b.dataset.sprtadd; const g=(sp.subgoals||[]).find(x=>x.id===gid); if(!g) return; const inp=root.querySelector('[data-sprtnew="'+gid+'"]'); const v=(inp&&inp.value||"").trim(); if(!v){ toast("Titel fehlt"); return; } (g.todos=g.todos||[]).push({id:uid(), title:v, done:false}); _recompSub(g); sp.updatedAt=Date.now(); save(); render(); });
+  root.querySelectorAll("[data-sprtnew]").forEach(inp=>inp.onkeydown=e=>{ if(e.key==="Enter"){ const gid=inp.dataset.sprtnew; const btn=root.querySelector('[data-sprtadd="'+gid+'"]'); if(btn) btn.click(); } });
   const sa=root.querySelector("#sprSubAdd"); if(sa) sa.onclick=()=>{ const t=(root.querySelector("#sprSubTitle").value||"").trim(); const p=parseInt(root.querySelector("#sprSubPct").value)||0; if(!t){ toast("Titel fehlt"); return; } (sp.subgoals=sp.subgoals||[]).push({id:uid(), title:t, pct:Math.max(0,Math.min(100,p)), done:false, doneAt:null}); sp.updatedAt=Date.now(); save(); render(); };
   const lg=root.querySelector("#sprLog"); if(lg) lg.onclick=()=>{ const m=parseInt(root.querySelector("#sprMin").value)||0; const n=(root.querySelector("#sprNote").value||"").trim(); if(!m && !n){ toast("Minuten oder Notiz eingeben"); return; } (sp.entries=sp.entries||[]).push({id:uid(), date:todayStr(), minutes:m, note:n}); sp.updatedAt=Date.now(); save(); render(); toast("Eingetragen ✓"); };
   root.querySelectorAll("[data-sprentdel]").forEach(b=>b.onclick=()=>{ sp.entries=(sp.entries||[]).filter(x=>x.id!==b.dataset.sprentdel); sp.updatedAt=Date.now(); save(); render(); });
@@ -3282,7 +3306,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-08.25";
+const APP_VERSION="2026-09-08.26";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
