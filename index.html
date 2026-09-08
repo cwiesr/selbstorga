@@ -102,6 +102,18 @@
   /* Übersicht: Tagesziel neben Schnell-Eingabe (Desktop), gestapelt (Mobil) */
   .ov-row{display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap}
   .ov-row > .card{flex:1 1 300px; margin:0}
+  .ov-top{display:grid; grid-template-columns:1fr; gap:12px; margin-bottom:12px}
+  .ov-top > .card{margin:0}
+  @media(min-width:820px){ .ov-top{grid-template-columns:1fr 1fr 1fr; align-items:start} }
+  /* 6-Wochen-Thema */
+  .spr-stat{display:flex; gap:16px; flex-wrap:wrap; margin:8px 0}
+  .spr-stat .n{font-size:20px; font-weight:750}
+  .spr-bar{height:12px; border-radius:8px; background:var(--panel2); overflow:hidden; margin:6px 0}
+  .spr-bar > span{display:block; height:100%; background:var(--good)}
+  .spr-sub{display:flex; align-items:center; gap:8px; padding:7px 0; border-top:1px solid var(--border)}
+  .spr-sub .check{flex:0 0 auto}
+  .spr-chart{width:100%; height:150px; display:block; background:var(--panel2); border:1px solid var(--border); border-radius:10px}
+  .spr-entry{display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid var(--border); font-size:13px}
   /* Tagesziel-Verlauf in Routinen */
   .dgbar{display:flex; align-items:center; gap:8px; padding:5px 0}
   .dgbar-track{flex:1 1 auto; height:8px; border-radius:6px; background:var(--panel2); overflow:hidden}
@@ -447,6 +459,7 @@ function seed(){
     tabOrder:[],     // frei angepasste Reihenfolge der Tabs (keys)
     players:[],      // {id, name, rate, notes, topups:[{id,hours,date,note}], updatedAt}
     lessons:[],      // {id, date, time, durationMin, title, participants:[{playerId,price,method,paid}], updatedAt, createdAt}
+    sprints:[],      // 6-Wochen-Themen {id,title,startDate,weeks,subgoals:[{id,title,pct,done,doneAt}],entries:[{id,date,minutes,note}],archived,updatedAt}
     ui:{active:"overview"}
   };
 }
@@ -533,7 +546,7 @@ function save(){
 function ensureState(){
   const defs={ mindAnswers:{}, mindDayQ:{}, mindDayR:{}, mindDayQuote:{}, mindAskedQ:[], mindAskedR:[],
     mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{},
-    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[], tabLabels:{}, dayGoalLog:{}, players:[], lessons:[],
+    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[], tabLabels:{}, dayGoalLog:{}, players:[], lessons:[], sprints:[],
     sync:{enabled:false, pass:"", apiBase:""} };
   // Tagesziel jetzt geräteübergreifend (aus altem lokalem S.ui übernehmen)
   if(S.ui){ if(S.dayGoal==null && S.ui.dayGoal!=null) S.dayGoal=S.ui.dayGoal; if(S.dayGoalManual==null && S.ui.dayGoalManual!=null) S.dayGoalManual=S.ui.dayGoalManual; }
@@ -1240,6 +1253,141 @@ function bindBoard(root){
   });
 }
 
+/* ============================ 6-WOCHEN-THEMA (Fokus-Sprint) ============================ */
+const SPRINT_DAYS=42; // 6 Wochen
+function activeSprint(){ const a=(S.sprints||[]).filter(s=>!s.archived); return a.length?a[a.length-1]:null; }
+function sprintPct(sp){ return Math.min(100, Math.round((sp.subgoals||[]).filter(g=>g.done).reduce((s,g)=>s+(+g.pct||0),0))); }
+function sprintMinutes(sp){ return (sp.entries||[]).reduce((s,e)=>s+(+e.minutes||0),0); }
+function sprintDayNo(sp){ const s=new Date(sp.startDate+"T00:00:00"), t=new Date(todayStr()+"T00:00:00"); return Math.floor((t-s)/86400000)+1; }
+function fmtMin(m){ m=Math.round(m||0); const h=Math.floor(m/60), r=m%60; return h?`${h} h${r?" "+r+" min":""}`:`${r} min`; }
+function sprintChartSVG(sp){
+  const start=new Date(sp.startDate+"T00:00:00");
+  const days=[]; for(let i=0;i<SPRINT_DAYS;i++){ const d=new Date(start); d.setDate(start.getDate()+i); days.push(isoLocal(d)); }
+  // Minuten je Tag + kumulierte Ziel-% (Unterziele nach doneAt)
+  const minByDay={}; const actDay={}; (sp.entries||[]).forEach(e=>{ minByDay[e.date]=(minByDay[e.date]||0)+(+e.minutes||0); actDay[e.date]=true; });
+  (sp.subgoals||[]).forEach(g=>{ if(g.done && g.doneAt) actDay[g.doneAt]=true; });
+  const maxMin=Math.max(30, ...Object.values(minByDay));
+  const W=560, H=150, padL=6, padR=6, padT=10, padB=16;
+  const iw=W-padL-padR, ih=H-padT-padB, bw=iw/SPRINT_DAYS;
+  const todayI=days.indexOf(todayStr());
+  let bars="", dots="", cum=0; const pts=[];
+  days.forEach((d,i)=>{
+    const mins=minByDay[d]||0; const bh=Math.round((mins/maxMin)*ih);
+    const x=padL+i*bw;
+    if(mins>0) bars+=`<rect x="${(x+1).toFixed(1)}" y="${(padT+ih-bh).toFixed(1)}" width="${(bw-2).toFixed(1)}" height="${bh}" rx="1.5" fill="var(--accent)" opacity="0.55"/>`;
+    // kumulierte % bis einschließlich diesem Tag
+    (sp.subgoals||[]).forEach(g=>{ if(g.done && g.doneAt===d) cum+=(+g.pct||0); });
+    const y=padT+ih-(Math.min(100,cum)/100)*ih;
+    pts.push([x+bw/2, y]);
+    if(actDay[d]) dots+=`<circle cx="${(x+bw/2).toFixed(1)}" cy="${(padT+ih-2).toFixed(1)}" r="2.6" fill="var(--good)"/>`;
+  });
+  const line=pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  // Ideallinie 0->100
+  const ideal=`M ${padL} ${padT+ih} L ${padL+iw} ${padT}`;
+  const todayX = todayI>=0 ? padL+todayI*bw+bw/2 : null;
+  return `<svg class="spr-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Fortschrittskurve">
+    <path d="${ideal}" stroke="var(--muted2)" stroke-width="1" stroke-dasharray="4 4" fill="none" opacity="0.5"/>
+    ${bars}
+    ${dots}
+    <path d="${line}" stroke="var(--good)" stroke-width="2.5" fill="none" stroke-linejoin="round"/>
+    ${todayX!=null?`<line x1="${todayX.toFixed(1)}" y1="${padT}" x2="${todayX.toFixed(1)}" y2="${padT+ih}" stroke="var(--warn)" stroke-width="1.5" opacity="0.7"/>`:""}
+  </svg>
+  <div class="tiny muted" style="display:flex; gap:14px; margin-top:4px; flex-wrap:wrap">
+    <span><span style="color:var(--good)">▬</span> Fortschritt %</span>
+    <span><span style="color:var(--accent)">▮</span> Zeit/Tag</span>
+    <span><span style="color:var(--good)">●</span> erledigt</span>
+    <span><span style="color:var(--muted2)">┈</span> Idealverlauf</span>
+    ${todayX!=null?`<span><span style="color:var(--warn)">│</span> heute</span>`:""}
+  </div>`;
+}
+function sprintCardHTML(){
+  const sp=activeSprint();
+  const collapsed=!!S.ui.sprintCollapsed;
+  if(!sp){
+    return `<div class="card"><div class="row center" style="justify-content:space-between"><h3 style="margin:0">🎯 6-Wochen-Thema</h3>
+      <button class="btn sm" id="sprNew">＋ Thema starten</button></div>
+      <div class="tiny muted" style="margin-top:6px">Setz dir ein Thema für die nächsten 6 Wochen, teile es in Unterziele mit %-Anteil und tracke Zeit &amp; Fortschritt.</div></div>`;
+  }
+  const pct=sprintPct(sp);
+  const dayNo=sprintDayNo(sp), left=Math.max(0, SPRINT_DAYS-dayNo);
+  const mins=sprintMinutes(sp);
+  const wk=last(7); const mins7=(sp.entries||[]).filter(e=>wk.includes(e.date)).reduce((s,e)=>s+(+e.minutes||0),0);
+  const subs=(sp.subgoals||[]);
+  const pctSum=subs.reduce((s,g)=>s+(+g.pct||0),0);
+  const entries=[...(sp.entries||[])].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,8);
+  return `<div class="card">
+    <div class="row center" style="justify-content:space-between; gap:8px; cursor:pointer" id="sprHead">
+      <div class="grow" style="min-width:0"><b>🎯 ${esc(sp.title)}</b>
+        <div class="tiny muted">${dayNo>0?`Tag ${Math.min(dayNo,SPRINT_DAYS)}/${SPRINT_DAYS}`:"startet "+fmtDate(sp.startDate)} · noch ${left} Tage · ${pct}% erreicht</div></div>
+      <button class="btn ghost sm" id="sprToggle">${collapsed?"▾":"▴"}</button>
+    </div>
+    <div id="sprBody" style="${collapsed?"display:none":"margin-top:10px"}">
+      <div class="spr-bar"><span style="width:${pct}%"></span></div>
+      <div class="spr-stat">
+        <div><div class="n">${pct}%</div><div class="tiny muted">Fortschritt</div></div>
+        <div><div class="n">${fmtMin(mins)}</div><div class="tiny muted">investiert gesamt</div></div>
+        <div><div class="n">${fmtMin(mins7)}</div><div class="tiny muted">letzte 7 Tage</div></div>
+      </div>
+      ${sprintChartSVG(sp)}
+      <div style="margin-top:12px" class="row center">
+        <b class="grow">Unterziele</b>
+        <span class="tiny muted">${pctSum}% verteilt${pctSum!==100?" (Ziel: 100%)":""}</span>
+      </div>
+      <div>${subs.length?subs.map(g=>`<div class="spr-sub">
+        <button class="check ${g.done?"on":""}" data-sprsub="${g.id}">${g.done?"✓":""}</button>
+        <span class="grow ${g.done?"":""}" style="${g.done?"text-decoration:line-through;opacity:.65":""}">${esc(g.title)}</span>
+        <span class="tiny muted">${g.pct||0}%</span>
+        <button class="btn ghost sm" data-sprsubdel="${g.id}" title="Entfernen">✕</button>
+      </div>`).join(""):`<div class="tiny muted" style="padding:4px 0">Noch keine Unterziele.</div>`}</div>
+      <div class="part-row" style="grid-template-columns:1fr 76px auto; margin-top:8px">
+        <input id="sprSubTitle" placeholder="Neues Unterziel…" autocomplete="off">
+        <input id="sprSubPct" type="number" min="0" max="100" placeholder="% Anteil">
+        <button class="btn sm" id="sprSubAdd">＋</button>
+      </div>
+      <div style="margin-top:14px" class="row center"><b class="grow">Heute eintragen</b></div>
+      <div class="part-row" style="grid-template-columns:90px 1fr auto; margin-top:6px">
+        <input id="sprMin" type="number" min="0" step="5" placeholder="Min.">
+        <input id="sprNote" placeholder="Was hast du erledigt? (optional)" autocomplete="off">
+        <button class="btn sm" id="sprLog">Eintragen</button>
+      </div>
+      ${entries.length?`<div style="margin-top:8px">${entries.map(e=>`<div class="spr-entry">
+        <span class="tiny muted" style="width:80px; flex:0 0 auto">${fmtDate(e.date)}</span>
+        <span class="grow">${e.minutes?`<b>${fmtMin(e.minutes)}</b>`:""}${e.minutes&&e.note?" · ":""}${esc(e.note||"")}</span>
+        <button class="btn ghost sm" data-sprentdel="${e.id}" title="Entfernen">✕</button>
+      </div>`).join("")}</div>`:""}
+      <div class="row" style="gap:8px; margin-top:12px">
+        <button class="btn ghost sm" id="sprEdit">✏️ Thema bearbeiten</button>
+        <button class="btn ghost sm" id="sprArchive">✓ Abschließen</button>
+        <button class="btn sm" id="sprNew">＋ Neues Thema</button>
+      </div>
+    </div>
+  </div>`;
+}
+async function sprintNew(){
+  const r=await uiPrompt("Neues 6-Wochen-Thema",[{key:"title",label:"Thema",placeholder:"z.B. Rückhand verbessern"},{key:"start",label:"Start (Datum)",value:todayStr()}],"Starten");
+  if(!r||!r.title) return;
+  (S.sprints=S.sprints||[]).push({id:uid(), title:r.title, startDate:(r.start||todayStr()), weeks:6, subgoals:[], entries:[], archived:false, updatedAt:Date.now()});
+  save(); render(); toast("6-Wochen-Thema gestartet 🎯");
+}
+async function sprintEdit(sp){
+  const r=await uiPrompt("Thema bearbeiten",[{key:"title",label:"Thema",value:sp.title},{key:"start",label:"Start (Datum)",value:sp.startDate}]);
+  if(!r) return; if(r.title) sp.title=r.title; if(r.start) sp.startDate=r.start; sp.updatedAt=Date.now(); save(); render(); toast("Gespeichert");
+}
+function bindSprint(root){
+  const nb=root.querySelector("#sprNew"); if(nb) nb.onclick=sprintNew;
+  const sp=activeSprint(); if(!sp) return;
+  const tg=()=>{ S.ui.sprintCollapsed=!S.ui.sprintCollapsed; save(); render(); };
+  const hd=root.querySelector("#sprHead"); if(hd) hd.onclick=(e)=>{ if(e.target.closest("button")&&e.target.id!=="sprToggle") return; tg(); };
+  const tb=root.querySelector("#sprToggle"); if(tb) tb.onclick=(e)=>{ e.stopPropagation(); tg(); };
+  const eb=root.querySelector("#sprEdit"); if(eb) eb.onclick=(e)=>{ e.stopPropagation(); sprintEdit(sp); };
+  const ab=root.querySelector("#sprArchive"); if(ab) ab.onclick=async (e)=>{ e.stopPropagation(); if(!await uiConfirm("Thema abschließen und archivieren?","Abschließen")) return; sp.archived=true; sp.updatedAt=Date.now(); save(); render(); toast("Thema abgeschlossen ✓"); };
+  root.querySelectorAll("[data-sprsub]").forEach(b=>b.onclick=()=>{ const g=(sp.subgoals||[]).find(x=>x.id===b.dataset.sprsub); if(!g) return; g.done=!g.done; g.doneAt=g.done?todayStr():null; sp.updatedAt=Date.now(); save(); render(); });
+  root.querySelectorAll("[data-sprsubdel]").forEach(b=>b.onclick=()=>{ sp.subgoals=(sp.subgoals||[]).filter(x=>x.id!==b.dataset.sprsubdel); sp.updatedAt=Date.now(); save(); render(); });
+  const sa=root.querySelector("#sprSubAdd"); if(sa) sa.onclick=()=>{ const t=(root.querySelector("#sprSubTitle").value||"").trim(); const p=parseInt(root.querySelector("#sprSubPct").value)||0; if(!t){ toast("Titel fehlt"); return; } (sp.subgoals=sp.subgoals||[]).push({id:uid(), title:t, pct:Math.max(0,Math.min(100,p)), done:false, doneAt:null}); sp.updatedAt=Date.now(); save(); render(); };
+  const lg=root.querySelector("#sprLog"); if(lg) lg.onclick=()=>{ const m=parseInt(root.querySelector("#sprMin").value)||0; const n=(root.querySelector("#sprNote").value||"").trim(); if(!m && !n){ toast("Minuten oder Notiz eingeben"); return; } (sp.entries=sp.entries||[]).push({id:uid(), date:todayStr(), minutes:m, note:n}); sp.updatedAt=Date.now(); save(); render(); toast("Eingetragen ✓"); };
+  root.querySelectorAll("[data-sprentdel]").forEach(b=>b.onclick=()=>{ sp.entries=(sp.entries||[]).filter(x=>x.id!==b.dataset.sprentdel); sp.updatedAt=Date.now(); save(); render(); });
+}
+
 /* ============================ VIEW: OVERVIEW ============================ */
 function viewOverview(){
   const open=S.todos.filter(t=>todoOpen(t));
@@ -1264,6 +1412,26 @@ function viewOverview(){
     </div>
     <div class="view-sub">${WD[new Date().getDay()]}, ${new Date().toLocaleDateString("de-DE")} · ${open.length} offen · ${(S.todos.filter(t=>todoDone(t)).length)?`<span class="donelink" data-jumpdone="overview">heute ${doneToday} erledigt ↓</span>`:`heute ${doneToday} erledigt`} ✓</div>
 
+    <div class="ov-top">
+    <div class="card">
+      <div class="row center" style="justify-content:space-between; gap:8px; cursor:pointer" id="dgHead">
+        <div class="row center" style="gap:8px"><b>🎯 Tagesziel</b><span class="tiny muted">${dgFilled}/${dgGoal} erledigt</span></div>
+        <button class="btn ghost sm" id="dgToggle">${dgCollapsed?"▾ ausklappen":"▴ einklappen"}</button>
+      </div>
+      <div id="dgBody" style="${dgCollapsed?"display:none":"margin-top:10px"}">
+        <div class="daygoal-dots">${Array.from({length:dgGoal},(_,i)=>{const on=i<dgFilled;return `<button class="daygoal-dot ${on?"on":""}" data-dg="${i+1}" title="${i+1}. To-do">${on?"●":"○"}</button>`;}).join("")}</div>
+        <div class="row center" style="justify-content:space-between; margin-top:10px; gap:8px">
+          <span class="tiny muted">${dgFilled>=dgGoal?"Geschafft! 🎉":`Noch ${dgGoal-dgFilled} bis zum Tagesziel`}</span>
+          <span class="row center" style="gap:6px">
+            <span class="tiny muted">Ziel</span>
+            <button class="btn ghost sm" id="dgMinus" title="weniger">−</button>
+            <b style="min-width:18px; text-align:center">${dgGoal}</b>
+            <button class="btn ghost sm" id="dgPlus" title="mehr">＋</button>
+          </span>
+        </div>
+      </div>
+    </div>
+
     <div class="card" style="border-color:var(--accent-dim)">
       <div class="row" style="justify-content:space-between; align-items:flex-start; gap:8px">
         <div class="grow">
@@ -1284,26 +1452,6 @@ function viewOverview(){
         </div>`).join("")}</div>`:""}
     </div>
 
-    <div class="ov-row">
-    <div class="card">
-      <div class="row center" style="justify-content:space-between; gap:8px; cursor:pointer" id="dgHead">
-        <div class="row center" style="gap:8px"><b>🎯 Tagesziel</b><span class="tiny muted">${dgFilled}/${dgGoal} erledigt</span></div>
-        <button class="btn ghost sm" id="dgToggle">${dgCollapsed?"▾ ausklappen":"▴ einklappen"}</button>
-      </div>
-      <div id="dgBody" style="${dgCollapsed?"display:none":"margin-top:10px"}">
-        <div class="daygoal-dots">${Array.from({length:dgGoal},(_,i)=>{const on=i<dgFilled;return `<button class="daygoal-dot ${on?"on":""}" data-dg="${i+1}" title="${i+1}. To-do">${on?"●":"○"}</button>`;}).join("")}</div>
-        <div class="row center" style="justify-content:space-between; margin-top:10px; gap:8px">
-          <span class="tiny muted">${dgFilled>=dgGoal?"Geschafft! 🎉":`Noch ${dgGoal-dgFilled} bis zum Tagesziel`}</span>
-          <span class="row center" style="gap:6px">
-            <span class="tiny muted">Ziel</span>
-            <button class="btn ghost sm" id="dgMinus" title="weniger">−</button>
-            <b style="min-width:18px; text-align:center">${dgGoal}</b>
-            <button class="btn ghost sm" id="dgPlus" title="mehr">＋</button>
-          </span>
-        </div>
-      </div>
-    </div>
-
     <div class="card">
       <h3>Schnell-Eingabe</h3>
       <div class="field"><input id="qadd" placeholder="Was ist zu tun?" autocomplete="off"></div>
@@ -1316,7 +1464,9 @@ function viewOverview(){
       <button class="btn" id="qaddBtn" style="width:100%">Hinzufügen</button>
       <div class="tiny muted" style="margin-top:8px">Landet als wichtiges To-do im Eingang. Für mehr Details → Chat 💬</div>
     </div>
-    </div>`;
+    </div>
+
+    ${sprintCardHTML()}`;
 
   // Zeit-Abschnitte: Heute · Morgen · Ab Übermorgen (überfällige zählen zu „Heute")
   const openAll=S.todos.filter(t=>todoOpen(t));
@@ -1341,7 +1491,7 @@ function viewOverview(){
   });
   html+=donePanel(S.todos.filter(t=>todoDone(t)), "overview", true);
 
-  const v=$("#view"); v.innerHTML=html; bindTodos(v); bindDone(v);
+  const v=$("#view"); v.innerHTML=html; bindTodos(v); bindDone(v); bindSprint(v);
   $("#ovBoardToggle").onclick=()=>{ S.ui.ovBoard=!S.ui.ovBoard; save(); render(); };
   // Tagesziel
   const dgToggleFn=()=>{ S.ui.dayGoalCollapsed=!S.ui.dayGoalCollapsed; save(); render(); };
@@ -2855,7 +3005,7 @@ function syncApiURL(){ const b=(S.sync&&S.sync.apiBase&&S.sync.apiBase.trim())||
 function stateWeight(s){ if(!s) return 0; return (s.todos?s.todos.length:0)+(s.goals?s.goals.length:0)+(s.bookmarks?s.bookmarks.length:0)+(s.ideas?s.ideas.length:0)+(s.wishes?s.wishes.length:0)+(s.myThoughts?s.myThoughts.length:0)+(s.thoughts?s.thoughts.length:0)+(s.mindAnswers?Object.keys(s.mindAnswers).length:0)+(s.mood?Object.keys(s.mood).length:0)+(s.areas&&s.areas.length>2?s.areas.length-2:0); }
 
 /* ---- Zusammenführung (Merge) auf Eintrags-Ebene ---- */
-const LIST_COLLS=["todos","goals","bookmarks","ideas","wishes","thoughts","myThoughts","areas","routines","players","lessons"];
+const LIST_COLLS=["todos","goals","bookmarks","ideas","wishes","thoughts","myThoughts","areas","routines","players","lessons","sprints"];
 const MAP_COLLS=["mindAnswers","mindDayQ","mindDayR","mindDayQuote","valuesDayQ","valuesAns","dayGoalLog"];
 function _itemTime(it){ return (it&&(it.updatedAt||0))||0; }
 function mergeList(localArr, remoteArr, localTomb, remoteTomb, tombAcc){
@@ -3120,7 +3270,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-07.22";
+const APP_VERSION="2026-09-08.23";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
