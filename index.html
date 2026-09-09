@@ -129,6 +129,16 @@
   #imgLightbox{position:fixed; inset:0; z-index:120; background:rgba(0,0,0,.85); display:none; place-items:center; padding:20px; cursor:zoom-out}
   #imgLightbox.on{display:grid}
   #imgLightbox img{max-width:100%; max-height:100%; border-radius:10px}
+  /* MIT – Most Important Tasks */
+  .mitstar{background:none; border:none; color:var(--muted2); font-size:19px; line-height:1; cursor:pointer; padding:2px 6px; flex:0 0 auto; align-self:flex-start}
+  .mitstar.on{color:var(--warn)}
+  .mit-strip{border:1px solid var(--warn); background:rgba(245,165,36,.09); border-radius:12px; padding:10px 12px; margin:0 0 14px}
+  .mit-strip-head{display:flex; align-items:center; gap:8px; font-weight:750; margin-bottom:8px; flex-wrap:wrap}
+  .mit-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:8px}
+  .mit-card{display:flex; align-items:flex-start; gap:8px; background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--warn); border-radius:10px; padding:8px 10px}
+  .mit-card .mtitle{font-weight:600; font-size:13px; cursor:pointer; word-break:break-word}
+  .mit-card .mtitle:hover{color:var(--accent)}
+  @media(min-width:820px){ .mit-strip{width:calc(100vw - 28px); margin-left:calc(50% - 50vw + 14px)} }
   /* Tagesziel-Verlauf in Routinen */
   .dgbar{display:flex; align-items:center; gap:8px; padding:5px 0}
   .dgbar-track{flex:1 1 auto; height:8px; border-radius:6px; background:var(--panel2); overflow:hidden}
@@ -733,7 +743,7 @@ function addTodo(o){
   const t={id:uid(), areaId:o.areaId, title:o.title, notes:o.notes||"", project:o.project||"",
     priority:o.priority||2, dueDate:o.dueDate||null, followUpDate:o.followUpDate||null,
     done:false, doneAt:null, createdAt:todayStr(), open:false, milestones:[], updatedAt:Date.now(),
-    daily:!!o.daily, dailyUntil:o.dailyUntil||null, dailyLog:{}, delegated:!!o.delegated, repeat:o.repeat||null, attachments:[]};
+    daily:!!o.daily, dailyUntil:o.dailyUntil||null, dailyLog:{}, delegated:!!o.delegated, repeat:o.repeat||null, attachments:[], mit:!!o.mit};
   S.todos.unshift(t); save(); return t;
 }
 /* --- Wiederkehrende To-dos: Frist rückt beim Abhaken zum nächsten Termin vor --- */
@@ -988,6 +998,7 @@ function todoCard(t, showArea, board){
         <div class="todo-title">${esc(t.title)}</div>
         <div class="badges">${badges.join("")}</div>
       </div>
+      <button class="mitstar ${t.mit?"on":""}" data-act="mit" title="Most Important Task (⭐)">${t.mit?"★":"☆"}</button>
       <button class="chev" data-act="open">${t.open?"▲":"▼"}</button>
     </div>
     <div class="todo-detail">
@@ -1067,6 +1078,7 @@ function bindTodos(root){
       btn.addEventListener("click", ev=>{
         const act=btn.dataset.act;
         if(act==="toggle"){ ev.stopPropagation(); toggleTodo(id); return; }
+        if(act==="mit"){ ev.stopPropagation(); t.mit=!t.mit; t.updatedAt=Date.now(); save(); render(); toast(t.mit?"Als MIT markiert ⭐":"MIT entfernt"); return; }
         if(act==="movecol"){ ev.stopPropagation(); chooseColumn(id); return; }
         if(act==="open"){ t.open=!t.open; save(); render(); return; }
         if(act==="del"){ uiConfirm("To-do löschen?","Löschen").then(ok=>{ if(ok) delTodo(id); }); return; }
@@ -1477,6 +1489,37 @@ function bindSprint(root){
   root.querySelectorAll("[data-sprentdel]").forEach(b=>b.onclick=()=>{ sp.entries=(sp.entries||[]).filter(x=>x.id!==b.dataset.sprentdel); sp.updatedAt=Date.now(); save(); render(); });
 }
 
+/* ============================ MIT – Most Important Tasks ============================ */
+function mitStripHTML(){
+  const mits=S.todos.filter(t=>t.mit && todoOpen(t))
+    .sort((a,b)=>{ const ao=(daysUntil(a.dueDate)!==null&&daysUntil(a.dueDate)<0)?0:1, bo=(daysUntil(b.dueDate)!==null&&daysUntil(b.dueDate)<0)?0:1;
+      if(ao!==bo) return ao-bo; return String(a.createdAt||"").localeCompare(String(b.createdAt||"")); });
+  const show=mits.slice(0,4), extra=mits.length-show.length;
+  let inner;
+  if(!show.length){
+    inner=`<div class="tiny muted">Markiere zähe, ewig aufgeschobene To-dos mit ⭐ – die 4 wichtigsten erscheinen hier oben, bis du sie endlich erledigst.</div>`;
+  } else {
+    inner=`<div class="mit-grid">${show.map(t=>{ const a=areaById(t.areaId); const du=daysUntil(t.dueDate);
+      return `<div class="mit-card">
+        <button class="check ${todoDone(t)?"on":""}" data-mittoggle="${t.id}" title="Erledigt">${todoDone(t)?"✓":""}</button>
+        <div class="grow" style="min-width:0">
+          <div class="mtitle" data-mitopen="${t.id}">${esc(t.title)}</div>
+          <div class="tiny muted" style="margin-top:2px">${a?`${esc(a.icon||"")} ${esc(a.name)}`:""}${t.dueDate?` · ⏳ ${fmtDate(t.dueDate)}${du<0?" (überf.)":""}`:""}</div>
+        </div>
+        <button class="mitstar on" data-mitunstar="${t.id}" title="MIT entfernen">★</button>
+      </div>`; }).join("")}</div>`;
+  }
+  return `<div class="mit-strip">
+    <div class="mit-strip-head">⭐ MIT – Most Important Tasks ${show.length?`<span class="tiny muted">(${show.length}${extra>0?` von ${mits.length}`:""})</span>`:""}${extra>0?`<span class="tiny muted" style="margin-left:auto">+${extra} weitere markiert</span>`:""}</div>
+    ${inner}
+  </div>`;
+}
+function bindMit(root){
+  root.querySelectorAll("[data-mittoggle]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); toggleTodo(b.dataset.mittoggle); });
+  root.querySelectorAll("[data-mitunstar]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); const t=S.todos.find(x=>x.id===b.dataset.mitunstar); if(t){ t.mit=false; t.updatedAt=Date.now(); save(); render(); } });
+  root.querySelectorAll("[data-mitopen]").forEach(el=>el.onclick=()=>openTodoInTab(el.dataset.mitopen));
+}
+
 /* ============================ VIEW: OVERVIEW ============================ */
 function viewOverview(){
   const open=S.todos.filter(t=>todoOpen(t));
@@ -1561,7 +1604,9 @@ function viewOverview(){
     </div>
     </div>
 
-    ${sprintCardHTML()}`;
+    ${sprintCardHTML()}
+
+    ${mitStripHTML()}`;
 
   // Zeit-Abschnitte: Heute · Morgen · Ab Übermorgen (überfällige zählen zu „Heute")
   const openAll=S.todos.filter(t=>todoOpen(t));
@@ -1586,7 +1631,7 @@ function viewOverview(){
   });
   html+=donePanel(S.todos.filter(t=>todoDone(t)), "overview", true);
 
-  const v=$("#view"); v.innerHTML=html; bindTodos(v); bindDone(v); bindSprint(v);
+  const v=$("#view"); v.innerHTML=html; bindTodos(v); bindDone(v); bindSprint(v); bindMit(v);
   $("#ovBoardToggle").onclick=()=>{ S.ui.ovBoard=!S.ui.ovBoard; save(); render(); };
   // Tagesziel
   const dgToggleFn=()=>{ S.ui.dayGoalCollapsed=!S.ui.dayGoalCollapsed; save(); render(); };
@@ -3368,7 +3413,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-09.27";
+const APP_VERSION="2026-09-09.28";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
