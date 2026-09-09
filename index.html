@@ -538,29 +538,46 @@ function updateUndoBtns(){
   if(u){ u.disabled=!nu; u.style.opacity=nu?"1":".35"; u.title=nu?("Rückgängig ("+nu+" Schritte möglich)"):"Nichts zum Rückgängigmachen"; }
   if(r){ r.disabled=!nr; r.style.opacity=nr?"1":".35"; r.title=nr?"Wiederherstellen":"Nichts zum Wiederherstellen"; }
 }
+const BIG_STATE=700*1024;   // ab dieser Größe (z.B. mit Anhängen) lokale Kopien sparsam halten
+function _purgeHistory(){ try{ let idx=JSON.parse(localStorage.getItem(KEY+".histIdx")||"[]"); idx.forEach(v=>{ try{ localStorage.removeItem(KEY+".h."+v.ts); }catch(e){} }); }catch(e){} try{ localStorage.removeItem(KEY+".histIdx"); localStorage.removeItem(KEY+".histTs"); localStorage.removeItem(KEY+".histW"); }catch(e){} }
+function _saveMain(serialized){
+  // Hauptstand speichern; bei vollem Speicher schrittweise Nebenspeicher freigeben und erneut versuchen
+  try{ localStorage.setItem(KEY, serialized); return true; }catch(e){}
+  try{ localStorage.removeItem(KEY+".undo"); localStorage.removeItem(KEY+".redo"); updateUndoBtns(); }catch(e){}
+  try{ localStorage.setItem(KEY, serialized); return true; }catch(e){}
+  _purgeHistory();
+  try{ localStorage.setItem(KEY, serialized); return true; }catch(e){}
+  try{ localStorage.removeItem(KEY+".safe"); localStorage.removeItem(KEY+".safeW"); }catch(e){}
+  try{ localStorage.setItem(KEY, serialized); return true; }catch(e){}
+  return false;
+}
 function save(){
   if(!_suppressPush) S._rev=Date.now();
   const _serialized=JSON.stringify(S);
-  // Undo-Verlauf: den vorherigen Stand sichern, bevor er überschrieben wird (nur echte Nutzeraktionen)
-  if(!_suppressPush && !_restoring){ try{ pushUndo(localStorage.getItem(KEY), _serialized); }catch(e){} }
-  try{ localStorage.setItem(KEY, _serialized); }catch(e){ toast("Speichern fehlgeschlagen"); }
+  const big=_serialized.length>BIG_STATE;
+  // Undo-Verlauf: den vorherigen Stand sichern (nur echte Nutzeraktionen; bei großem Stand auslassen, um Speicher zu schonen)
+  if(!_suppressPush && !_restoring && !big){ try{ pushUndo(localStorage.getItem(KEY), _serialized); }catch(e){} }
+  if(!_saveMain(_serialized)){ toast("Speicher voll – bitte einen Anhang entfernen"); return; }
+  if(big) return;   // bei großem Stand keine zusätzlichen Vollkopien (Sicherung/Historie) anlegen – Sync ist die Sicherung
   try{ // automatische lokale Sicherung des bisher größten Stands
     const w=stateWeight(S);
     if(w>0){
       const cur=+(localStorage.getItem(KEY+".safeW")||0);
-      if(w>=cur){ localStorage.setItem(KEY+".safe", JSON.stringify(S)); localStorage.setItem(KEY+".safeW", String(w)); }
+      if(w>=cur){ try{ localStorage.setItem(KEY+".safe", _serialized); localStorage.setItem(KEY+".safeW", String(w)); }catch(e){} }
       // Versions-Historie: Schnappschuss alle ~90s oder sobald der Umfang schrumpft
       const now=Date.now();
       const lastTs=+(localStorage.getItem(KEY+".histTs")||0);
       const lastW=+(localStorage.getItem(KEY+".histW")||0);
       if(now-lastTs>90000 || w<lastW){
         let idx=[]; try{ idx=JSON.parse(localStorage.getItem(KEY+".histIdx")||"[]"); }catch(e){}
-        localStorage.setItem(KEY+".h."+now, localStorage.getItem(KEY));
-        idx.push({ts:now, w});
-        while(idx.length>20){ const old=idx.shift(); try{ localStorage.removeItem(KEY+".h."+old.ts); }catch(e){} }
-        localStorage.setItem(KEY+".histIdx", JSON.stringify(idx));
-        localStorage.setItem(KEY+".histTs", String(now));
-        localStorage.setItem(KEY+".histW", String(w));
+        try{
+          localStorage.setItem(KEY+".h."+now, _serialized);
+          idx.push({ts:now, w});
+          while(idx.length>20){ const old=idx.shift(); try{ localStorage.removeItem(KEY+".h."+old.ts); }catch(e){} }
+          localStorage.setItem(KEY+".histIdx", JSON.stringify(idx));
+          localStorage.setItem(KEY+".histTs", String(now));
+          localStorage.setItem(KEY+".histW", String(w));
+        }catch(e){}
       }
     }
   }catch(e){}
@@ -953,6 +970,9 @@ function addAttachment(t, file){
   const MAX=2*1024*1024;
   const finish=(durl,type,name,size)=>{
     if(!durl || durl.length>2.7*1024*1024){ toast("Datei zu groß (max ~2 MB)"); return; }
+    // Gesamtgröße begrenzen, damit der lokale Speicher nicht überläuft
+    let cur=0; try{ cur=JSON.stringify(S).length; }catch(e){}
+    if(cur+durl.length > 4.3*1024*1024){ toast("Zu wenig Speicher – bitte zuerst einen bestehenden Anhang entfernen"); return; }
     t.attachments=t.attachments||[];
     t.attachments.push({id:uid(), name:name||"Datei", type:type||"", size:size||0, data:durl, ts:Date.now()});
     t.updatedAt=Date.now(); save(); render(); toast("Anhang hinzugefügt 📎");
@@ -3415,7 +3435,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-09.29";
+const APP_VERSION="2026-09-09.30";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
