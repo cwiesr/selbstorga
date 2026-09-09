@@ -120,6 +120,15 @@
   .spr-subtodos{padding:2px 0 8px 30px}
   .spr-subtodo{display:flex; align-items:center; gap:8px; padding:3px 0; font-size:13px}
   .check.sm{width:18px; height:18px; font-size:11px; border-radius:5px}
+  /* Anhänge */
+  .att-row{display:flex; align-items:center; gap:8px; padding:5px 0; border-top:1px solid var(--border)}
+  .att-thumb{width:44px; height:44px; object-fit:cover; border-radius:8px; border:1px solid var(--border); cursor:zoom-in; flex:0 0 auto}
+  .att-file{font-size:20px; flex:0 0 auto; width:44px; text-align:center}
+  .att-name{color:var(--accent); text-decoration:none; word-break:break-word; font-size:13px}
+  .att-name:hover{text-decoration:underline}
+  #imgLightbox{position:fixed; inset:0; z-index:120; background:rgba(0,0,0,.85); display:none; place-items:center; padding:20px; cursor:zoom-out}
+  #imgLightbox.on{display:grid}
+  #imgLightbox img{max-width:100%; max-height:100%; border-radius:10px}
   /* Tagesziel-Verlauf in Routinen */
   .dgbar{display:flex; align-items:center; gap:8px; padding:5px 0}
   .dgbar-track{flex:1 1 auto; height:8px; border-radius:6px; background:var(--panel2); overflow:hidden}
@@ -724,7 +733,7 @@ function addTodo(o){
   const t={id:uid(), areaId:o.areaId, title:o.title, notes:o.notes||"", project:o.project||"",
     priority:o.priority||2, dueDate:o.dueDate||null, followUpDate:o.followUpDate||null,
     done:false, doneAt:null, createdAt:todayStr(), open:false, milestones:[], updatedAt:Date.now(),
-    daily:!!o.daily, dailyUntil:o.dailyUntil||null, dailyLog:{}, delegated:!!o.delegated, repeat:o.repeat||null};
+    daily:!!o.daily, dailyUntil:o.dailyUntil||null, dailyLog:{}, delegated:!!o.delegated, repeat:o.repeat||null, attachments:[]};
   S.todos.unshift(t); save(); return t;
 }
 /* --- Wiederkehrende To-dos: Frist rückt beim Abhaken zum nächsten Termin vor --- */
@@ -909,6 +918,48 @@ function render(){
   viewOverview();
 }
 
+/* ---- Anhänge (Bild/Datei) an To-dos ---- */
+function attSize(b){ b=+b||0; return b>=1048576?(b/1048576).toFixed(1)+" MB":Math.max(1,Math.round(b/1024))+" KB"; }
+function attRow(at){
+  const isImg=(at.type||"").indexOf("image/")===0;
+  return `<div class="att-row" data-attid="${at.id}">
+    ${isImg?`<img class="att-thumb" src="${at.data}" data-attview="${at.id}" alt="${esc(at.name)}">`:`<span class="att-file">📎</span>`}
+    <a class="grow att-name" href="${at.data}" download="${esc(at.name)}" title="Herunterladen">${esc(at.name)}</a>
+    <span class="tiny muted" style="flex:0 0 auto">${attSize(at.size)}</span>
+    <button class="btn ghost sm" data-attdel="${at.id}" title="Entfernen">✕</button>
+  </div>`;
+}
+function downscaleImage(file, maxDim, quality, cb){
+  const r=new FileReader();
+  r.onload=()=>{ const img=new Image();
+    img.onload=()=>{ let w=img.width,h=img.height; const sc=Math.min(1, maxDim/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
+      try{ const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(img,0,0,w,h); cb(c.toDataURL("image/jpeg",quality)); }
+      catch(e){ cb(r.result); } };
+    img.onerror=()=>cb(r.result); img.src=r.result; };
+  r.onerror=()=>toast("Konnte Bild nicht lesen"); r.readAsDataURL(file);
+}
+function addAttachment(t, file){
+  if(!file) return;
+  const MAX=2*1024*1024;
+  const finish=(durl,type,name,size)=>{
+    if(!durl || durl.length>2.7*1024*1024){ toast("Datei zu groß (max ~2 MB)"); return; }
+    t.attachments=t.attachments||[];
+    t.attachments.push({id:uid(), name:name||"Datei", type:type||"", size:size||0, data:durl, ts:Date.now()});
+    t.updatedAt=Date.now(); save(); render(); toast("Anhang hinzugefügt 📎");
+  };
+  if(/^image\//.test(file.type)){
+    downscaleImage(file, 1280, 0.82, (durl)=>finish(durl, "image/jpeg", file.name, Math.round((durl.length-22)*0.75)));
+  } else {
+    if(file.size>MAX){ toast("Datei zu groß (max ~2 MB)"); return; }
+    const r=new FileReader(); r.onload=()=>finish(r.result, file.type||"application/octet-stream", file.name, file.size); r.onerror=()=>toast("Konnte Datei nicht lesen"); r.readAsDataURL(file);
+  }
+}
+function openImgLightbox(src){
+  let el=document.getElementById("imgLightbox");
+  if(!el){ el=document.createElement("div"); el.id="imgLightbox"; el.innerHTML='<img>'; document.body.appendChild(el); el.onclick=()=>el.classList.remove("on"); }
+  el.querySelector("img").src=src; el.classList.add("on");
+}
+
 /* ============================ TODO CARD (shared) ============================ */
 function todoCard(t, showArea, board){
   const a=areaById(t.areaId);
@@ -925,6 +976,7 @@ function todoCard(t, showArea, board){
   if(t.repeat && t.repeat.unit && !t.daily) badges.push(`<span class="badge">🔁 ${repeatLabel(t.repeat)}</span>`);
   if(showArea && a) badges.push(`<span class="badge"><span class="pdot" style="background:${a.color}"></span>${esc(a.name)}</span>`);
   if(t.project) badges.push(`<span class="badge">📂 ${esc(t.project)}</span>`);
+  if((t.attachments||[]).length) badges.push(`<span class="badge">📎 ${t.attachments.length}</span>`);
 
   const dn=todoDone(t);
   const _rp=repeatPreset(t.repeat);
@@ -993,6 +1045,11 @@ function todoCard(t, showArea, board){
           <button class="btn sm" data-act="ms-add">＋</button>
         </div>
       </div>
+      <div class="field"><label>Anhänge (Bild / Datei)</label>
+        <div data-atts>${(t.attachments||[]).map(at=>attRow(at)).join("")}</div>
+        <div class="row" style="margin-top:6px"><input type="file" data-attnew accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" style="font-size:12px; width:100%"></div>
+        <div class="tiny muted" style="margin-top:4px">Bilder werden automatisch verkleinert. Max ~2 MB pro Datei.</div>
+      </div>
       <div class="row" style="justify-content:space-between; margin-top:6px">
         <button class="btn danger sm" data-act="del">Löschen</button>
         <span class="tiny muted">angelegt ${fmtDate(t.createdAt)}</span>
@@ -1042,6 +1099,11 @@ function bindTodos(root){
         if(f==="areaId"||f==="project"||f==="priority"||f==="dueDate"||f==="title"||f==="dailyUntil") render();
       });
     });
+    // Anhänge
+    const fin=el.querySelector("[data-attnew]");
+    if(fin) fin.addEventListener("change", ()=>{ const f=fin.files&&fin.files[0]; if(f) addAttachment(t, f); fin.value=""; });
+    el.querySelectorAll("[data-attdel]").forEach(b=>b.addEventListener("click", ev=>{ ev.stopPropagation(); const aid=b.dataset.attdel; t.attachments=(t.attachments||[]).filter(x=>x.id!==aid); t.updatedAt=Date.now(); save(); render(); }));
+    el.querySelectorAll("[data-attview]").forEach(im=>im.addEventListener("click", ev=>{ ev.stopPropagation(); const at=(t.attachments||[]).find(x=>x.id===im.dataset.attview); if(at) openImgLightbox(at.data); }));
   });
 }
 
@@ -3306,7 +3368,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-08.26";
+const APP_VERSION="2026-09-09.27";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
