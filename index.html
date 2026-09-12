@@ -104,10 +104,16 @@
   .ov-row > .card{flex:1 1 300px; margin:0}
   .ov-top{display:grid; grid-template-columns:1fr; gap:12px; margin-bottom:12px}
   .ov-top > .card{margin:0}
+  /* 6-Wochen-Thema + Routinen nebeneinander (Desktop), gestapelt (Mobil) */
+  .spr-row{display:flex; flex-direction:column; gap:12px; margin-bottom:12px}
+  .spr-row > .card{margin:0}
   /* Desktop: volle Fensterbreite nutzen (aus der 760px-Spalte ausbrechen) */
   @media(min-width:820px){ .ov-top{grid-template-columns:1fr 1fr 1fr; align-items:start;
     width:calc(100vw - 28px); margin-left:calc(50% - 50vw + 14px)}
-    .spr-card{width:calc(100vw - 28px); margin-left:calc(50% - 50vw + 14px)} }
+    .spr-row{flex-direction:row; align-items:stretch;
+      width:calc(100vw - 28px); margin-left:calc(50% - 50vw + 14px)}
+    .spr-row > .spr-card{flex:1 1 auto; width:auto; margin-left:0; min-width:0}
+    .spr-row > .rtn-ov{flex:0 0 300px} }
   /* 6-Wochen-Thema */
   .spr-stat{display:flex; gap:16px; flex-wrap:wrap; margin:8px 0}
   .spr-stat .n{font-size:20px; font-weight:750}
@@ -1640,7 +1646,7 @@ function routineStripHTML(){
   const log=S.routineLog[today]||{done:{}};
   const doneMap=log.done||{};
   const done=pinned.filter(r=>doneMap[r.id]===true).length;
-  return `<div class="card">
+  return `<div class="card rtn-ov">
     <div class="row center" style="justify-content:space-between; gap:8px">
       <div class="row center" style="gap:8px"><b>🔁 Routinen</b><span class="tiny muted">${done}/${pinned.length} heute</span></div>
     </div>
@@ -1759,9 +1765,7 @@ function viewOverview(){
     </div>
     </div>
 
-    ${routineStripHTML()}
-
-    ${sprintCardHTML()}
+    <div class="spr-row">${sprintCardHTML()}${routineStripHTML()}</div>
 
     ${mitStripHTML()}
 
@@ -3583,7 +3587,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-12.34";
+const APP_VERSION="2026-09-12.35";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
