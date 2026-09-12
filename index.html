@@ -237,6 +237,17 @@
   .foc{display:flex; gap:8px}
   .foc button{flex:1; padding:10px 0; border-radius:10px; background:var(--panel2); border:1px solid var(--border)}
   .foc button.on{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:700}
+  .rpin{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--panel);flex:0 0 auto;display:grid;place-items:center;font-size:14px;opacity:.4;filter:grayscale(1)}
+  .rpin.on{opacity:1;filter:none;border-color:var(--accent);background:var(--accent-dim)}
+  /* kompakte Routinen-Leiste auf der Übersicht */
+  .rtn-chips{display:flex; flex-wrap:wrap; gap:8px}
+  .rtn-chip{display:inline-flex; align-items:center; gap:6px; padding:6px 10px 6px 7px; border-radius:999px;
+    border:1px solid var(--border); background:var(--panel2); color:var(--fg); font-size:13px; cursor:pointer; transition:.12s}
+  .rtn-chip .rc-box{width:18px;height:18px;border-radius:6px;border:2px solid var(--muted2);display:grid;place-items:center;font-size:12px;color:#fff;flex:0 0 auto}
+  .rtn-chip.on{background:var(--good-dim,rgba(70,201,139,.16)); border-color:var(--good)}
+  .rtn-chip.on .rc-box{background:var(--good); border-color:var(--good)}
+  .rtn-chip.on .rc-name{text-decoration:line-through; opacity:.7}
+  .rtn-chip:active{transform:scale(.96)}
 
   /* mood sliders + mind */
   input[type=range]{-webkit-appearance:none; appearance:none; height:6px; border-radius:999px;
@@ -609,6 +620,8 @@ function ensureState(){
   // Tagesziel jetzt geräteübergreifend (aus altem lokalem S.ui übernehmen)
   if(S.ui){ if(S.dayGoal==null && S.ui.dayGoal!=null) S.dayGoal=S.ui.dayGoal; if(S.dayGoalManual==null && S.ui.dayGoalManual!=null) S.dayGoalManual=S.ui.dayGoalManual; }
   if(S.dayGoal==null) S.dayGoal=5;
+  // Einmalig: Orthomol-Routine anlegen und auf der Übersicht anzeigen
+  if(!S.orthomolSeeded){ if(!S.routines.some(r=>r.id==="r_orthomol")) S.routines.push({id:"r_orthomol", name:"Orthomol genommen", icon:"💊", overview:true, updatedAt:Date.now()}); S.orthomolSeeded=true; }
   for(const k in defs){ if(S[k]==null) S[k]=defs[k]; }
   if(S._rev==null) S._rev=0;
   if(!S.startDate) S.startDate=todayStr();
@@ -1619,6 +1632,38 @@ function bindPlan(root){
   root.querySelectorAll("[data-planopen]").forEach(el=>el.onclick=()=>openTodoInTab(el.dataset.planopen));
 }
 
+/* ---- Routinen kompakt auf der Übersicht (verlinkte Routinen abhaken) ---- */
+function routineStripHTML(){
+  const pinned=(S.routines||[]).filter(r=>r.overview);
+  if(!pinned.length) return "";
+  const today=todayStr();
+  const log=S.routineLog[today]||{done:{}};
+  const doneMap=log.done||{};
+  const done=pinned.filter(r=>doneMap[r.id]===true).length;
+  return `<div class="card">
+    <div class="row center" style="justify-content:space-between; gap:8px">
+      <div class="row center" style="gap:8px"><b>🔁 Routinen</b><span class="tiny muted">${done}/${pinned.length} heute</span></div>
+    </div>
+    <div class="rtn-chips" style="margin-top:8px">
+      ${pinned.map(r=>{ const on=doneMap[r.id]===true;
+        return `<button class="rtn-chip ${on?"on":""}" data-rtn="${r.id}" title="${esc(r.name)} – abhaken">
+          <span class="rc-box">${on?"✓":""}</span><span>${esc(r.icon||"•")}</span><span class="rc-name">${esc(r.name)}</span></button>`;
+      }).join("")}
+    </div>
+  </div>`;
+}
+function bindRoutineStrip(root){
+  root.querySelectorAll("[data-rtn]").forEach(b=>b.onclick=()=>{
+    const today=todayStr();
+    const log=S.routineLog[today]||(S.routineLog[today]={done:{},focus:null});
+    if(!log.done) log.done={};
+    const rid=b.dataset.rtn;
+    log.done[rid]= log.done[rid]===true ? undefined : true;
+    if(log.done[rid]===undefined) delete log.done[rid];
+    save(); render();
+  });
+}
+
 /* ============================ VIEW: OVERVIEW ============================ */
 function viewOverview(){
   const open=S.todos.filter(t=>todoOpen(t));
@@ -1714,6 +1759,8 @@ function viewOverview(){
     </div>
     </div>
 
+    ${routineStripHTML()}
+
     ${sprintCardHTML()}
 
     ${mitStripHTML()}
@@ -1743,7 +1790,7 @@ function viewOverview(){
   });
   html+=donePanel(S.todos.filter(t=>todoDone(t)), "overview", true);
 
-  const v=$("#view"); v.innerHTML=html; bindTodos(v); bindDone(v); bindSprint(v); bindMit(v); bindPlan(v);
+  const v=$("#view"); v.innerHTML=html; bindTodos(v); bindDone(v); bindSprint(v); bindMit(v); bindPlan(v); bindRoutineStrip(v);
   $("#ovBoardToggle").onclick=()=>{ S.ui.ovBoard=!S.ui.ovBoard; save(); render(); };
   // Tagesziel
   const dgToggleFn=()=>{ S.ui.dayGoalCollapsed=!S.ui.dayGoalCollapsed; save(); render(); };
@@ -2014,6 +2061,7 @@ function viewRoutines(){
             <span class="ic">${esc(r.icon||"•")}</span>
             <div class="grow">${esc(r.name)}</div>
             <div class="rbtns">
+              <button class="rpin ${r.overview?"on":""}" data-rpin="${r.id}" title="${r.overview?"Wird auf der Übersicht angezeigt":"Auf der Übersicht anzeigen"}">📌</button>
               <button class="rtoggle no ${log.done[r.id]===false?"on":""}" data-rid="${r.id}" data-val="no" title="Nicht erledigt">✕</button>
               <button class="rtoggle yes ${log.done[r.id]===true?"on":""}" data-rid="${r.id}" data-val="yes" title="Erledigt">✓</button>
             </div>
@@ -2058,6 +2106,11 @@ function viewRoutines(){
   });
   v.querySelectorAll("[data-foc]").forEach(b=>b.onclick=()=>{
     const n=+b.dataset.foc; log.focus=(log.focus===n?null:n); save(); render();
+  });
+  v.querySelectorAll("[data-rpin]").forEach(b=>b.onclick=()=>{
+    const r=S.routines.find(x=>x.id===b.dataset.rpin); if(!r) return;
+    r.overview=!r.overview; r.updatedAt=Date.now(); save(); render();
+    toast(r.overview?"Auf Übersicht verlinkt 📌":"Von Übersicht entfernt");
   });
   $("#addRoutine").onclick=async ()=>{
     const r=await uiPrompt("Neue Routine",[
@@ -3530,7 +3583,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-12.33";
+const APP_VERSION="2026-09-12.34";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
