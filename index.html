@@ -132,6 +132,8 @@
   /* MIT – Most Important Tasks */
   .mitstar{background:none; border:none; color:var(--muted2); font-size:19px; line-height:1; cursor:pointer; padding:2px 6px; flex:0 0 auto; align-self:flex-start}
   .mitstar.on{color:var(--warn)}
+  .planbtn{background:none; border:none; color:var(--muted2); font-size:15px; line-height:1; cursor:pointer; padding:2px 5px; flex:0 0 auto; align-self:flex-start; opacity:.65}
+  .planbtn.on{color:var(--accent); opacity:1}
   .mit-strip{border:1px solid var(--warn); background:rgba(245,165,36,.09); border-radius:12px; padding:10px 12px; margin:0 0 14px}
   .mit-strip-head{display:flex; align-items:center; gap:8px; font-weight:750; margin-bottom:8px; flex-wrap:wrap}
   .mit-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:8px}
@@ -139,6 +141,20 @@
   .mit-card .mtitle{font-weight:600; font-size:13px; cursor:pointer; word-break:break-word}
   .mit-card .mtitle:hover{color:var(--accent)}
   @media(min-width:820px){ .mit-strip{width:calc(100vw - 28px); margin-left:calc(50% - 50vw + 14px)} }
+  /* Tagesplan (kommende Tage, per Hand belegen) */
+  .plan-wrap{margin:0 0 14px}
+  .plan-head-row{font-weight:750; margin-bottom:8px}
+  .plan-board{display:grid; grid-template-columns:repeat(4, minmax(155px,1fr)); gap:10px}
+  .plan-col{background:var(--panel2); border:1px solid var(--border); border-radius:12px; display:flex; flex-direction:column; align-self:flex-start; min-height:60px}
+  .plan-col.dragover{outline:2px dashed var(--accent); outline-offset:-2px}
+  .plan-col-head{font-weight:700; font-size:13px; padding:8px 10px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--panel2); border-radius:12px 12px 0 0}
+  .plan-col-body{padding:8px; display:flex; flex-direction:column; gap:6px; min-height:44px}
+  .plan-chip{display:flex; align-items:center; gap:7px; background:var(--panel); border:1px solid var(--border); border-radius:9px; padding:6px 8px; font-size:13px; cursor:grab}
+  .plan-chip.dragging{opacity:.45}
+  .plan-chip .mtitle{cursor:pointer; word-break:break-word}
+  .plan-chip .mtitle:hover{color:var(--accent)}
+  @media(max-width:640px){ .plan-wrap{overflow-x:auto} .plan-board{min-width:620px} }
+  @media(min-width:820px){ .plan-wrap{width:calc(100vw - 28px); margin-left:calc(50% - 50vw + 14px)} }
   /* Tagesziel-Verlauf in Routinen */
   .dgbar{display:flex; align-items:center; gap:8px; padding:5px 0}
   .dgbar-track{flex:1 1 auto; height:8px; border-radius:6px; background:var(--panel2); overflow:hidden}
@@ -1007,6 +1023,7 @@ function todoCard(t, showArea, board){
   if(showArea && a) badges.push(`<span class="badge"><span class="pdot" style="background:${a.color}"></span>${esc(a.name)}</span>`);
   if(t.project) badges.push(`<span class="badge">📂 ${esc(t.project)}</span>`);
   if((t.attachments||[]).length) badges.push(`<span class="badge">📎 ${t.attachments.length}</span>`);
+  if(t.planDay) badges.push(`<span class="badge">🗓 ${fmtDate(t.planDay)}</span>`);
 
   const dn=todoDone(t);
   const _rp=repeatPreset(t.repeat);
@@ -1019,6 +1036,7 @@ function todoCard(t, showArea, board){
         <div class="badges">${badges.join("")}</div>
       </div>
       <button class="mitstar ${t.mit?"on":""}" data-act="mit" title="Most Important Task (⭐)">${t.mit?"★":"☆"}</button>
+      <button class="planbtn ${t.planDay?"on":""}" data-act="planday" title="In Tagesplan legen">🗓</button>
       <button class="chev" data-act="open">${t.open?"▲":"▼"}</button>
     </div>
     <div class="todo-detail">
@@ -1099,6 +1117,7 @@ function bindTodos(root){
         const act=btn.dataset.act;
         if(act==="toggle"){ ev.stopPropagation(); toggleTodo(id); return; }
         if(act==="mit"){ ev.stopPropagation(); t.mit=!t.mit; t.updatedAt=Date.now(); save(); render(); toast(t.mit?"Als MIT markiert ⭐":"MIT entfernt"); return; }
+        if(act==="planday"){ ev.stopPropagation(); chooseDay(id); return; }
         if(act==="movecol"){ ev.stopPropagation(); chooseColumn(id); return; }
         if(act==="open"){ t.open=!t.open; save(); render(); return; }
         if(act==="del"){ uiConfirm("To-do löschen?","Löschen").then(ok=>{ if(ok) delTodo(id); }); return; }
@@ -1540,6 +1559,65 @@ function bindMit(root){
   root.querySelectorAll("[data-mitopen]").forEach(el=>el.onclick=()=>openTodoInTab(el.dataset.mitopen));
 }
 
+/* ============================ TAGESPLAN (kommende Tage, per Hand) ============================ */
+function planDays(){ const out=[]; const d=new Date(todayStr()+"T00:00:00"); while(out.length<4){ if(d.getDay()!==0) out.push(isoLocal(d)); d.setDate(d.getDate()+1); } return out; }
+function rollForwardPlan(){
+  const first=planDays()[0]; let ch=false;
+  (S.todos||[]).forEach(t=>{ if(t.planDay && !todoDone(t) && t.planDay<first){ t.planDay=first; t.updatedAt=Date.now(); ch=true; } });
+  if(ch) save();
+  return ch;
+}
+function planChip(t){
+  return `<div class="plan-chip" draggable="true" data-planchip="${t.id}">
+    <button class="check sm ${todoDone(t)?"on":""}" data-plantoggle="${t.id}" title="Erledigt">${todoDone(t)?"✓":""}</button>
+    <span class="grow mtitle" data-planopen="${t.id}" style="min-width:0">${esc(t.title)}</span>
+    <button class="btn ghost sm" data-planremove="${t.id}" title="Aus Tagesplan entfernen">✕</button>
+  </div>`;
+}
+function planStripHTML(){
+  const days=planDays();
+  let h=`<div class="plan-wrap"><div class="plan-head-row">🗓 Tagesplan <span class="tiny muted" style="font-weight:400">— To-dos per Hand auf die Tage ziehen (bleiben zusätzlich in der Prio-Liste)</span></div><div class="plan-board">`;
+  days.forEach((d,i)=>{
+    const dd=new Date(d+"T00:00:00");
+    const items=(S.todos||[]).filter(t=>t.planDay===d && !todoDone(t)).sort((a,b)=>urgency(b)-urgency(a));
+    h+=`<div class="plan-col" data-planday="${d}">
+      <div class="plan-col-head">${i===0?"Heute · ":""}${WDS[dd.getDay()]} ${dd.getDate()}.${dd.getMonth()+1}. <span class="tiny muted">${items.length}</span></div>
+      <div class="plan-col-body">${items.map(planChip).join("")||`<div class="tiny muted" style="padding:6px 4px">Hierher ziehen …</div>`}</div>
+    </div>`;
+  });
+  h+=`</div></div>`;
+  return h;
+}
+function chooseDay(id){
+  const t=S.todos.find(x=>x.id===id); if(!t) return;
+  const days=planDays();
+  $("#modalTitle").textContent="In Tagesplan legen";
+  $("#modalBody").innerHTML=`<div style="display:flex;flex-direction:column;gap:8px">
+    ${days.map((d,i)=>{const dd=new Date(d+"T00:00:00");return `<button class="btn ${t.planDay===d?'':'sec'}" data-pd="${d}">${i===0?"Heute · ":""}${WD[dd.getDay()]}, ${dd.getDate()}.${dd.getMonth()+1}.${t.planDay===d?' ✓':''}</button>`;}).join("")}
+    ${t.planDay?`<button class="btn danger" data-pd="">Aus Tagesplan entfernen</button>`:""}
+  </div>`;
+  const m=$("#modal"); m.classList.add("open"); $("#modalOk").textContent="Schließen";
+  const close=()=>{ closeModal(); $("#modalOk").textContent="OK"; };
+  m.querySelectorAll("[data-pd]").forEach(b=>b.onclick=()=>{ t.planDay=b.dataset.pd||null; t.updatedAt=Date.now(); save(); render(); close(); });
+  $("#modalOk").onclick=close; $("#modalCancel").onclick=close; $("#modalX").onclick=close; m.onclick=e=>{ if(e.target.id==="modal") close(); };
+}
+function bindPlan(root){
+  let dragId=null;
+  root.querySelectorAll("[data-planchip]").forEach(el=>{
+    el.addEventListener("dragstart", e=>{ dragId=el.dataset.planchip; try{ e.dataTransfer.setData("text/plain", dragId); e.dataTransfer.effectAllowed="move"; }catch(_){} el.classList.add("dragging"); });
+    el.addEventListener("dragend", ()=>{ el.classList.remove("dragging"); dragId=null; root.querySelectorAll(".plan-col.dragover").forEach(c=>c.classList.remove("dragover")); });
+  });
+  root.querySelectorAll(".plan-col").forEach(col=>{
+    col.addEventListener("dragover", e=>{ e.preventDefault(); try{ e.dataTransfer.dropEffect="move"; }catch(_){} col.classList.add("dragover"); });
+    col.addEventListener("dragleave", e=>{ if(e.target===col) col.classList.remove("dragover"); });
+    col.addEventListener("drop", e=>{ e.preventDefault(); col.classList.remove("dragover"); let id=dragId; try{ id=e.dataTransfer.getData("text/plain")||dragId; }catch(_){}
+      if(id){ const t=S.todos.find(x=>x.id===id); if(t){ t.planDay=col.dataset.planday; t.updatedAt=Date.now(); save(); render(); } } });
+  });
+  root.querySelectorAll("[data-plantoggle]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); toggleTodo(b.dataset.plantoggle); });
+  root.querySelectorAll("[data-planremove]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); const t=S.todos.find(x=>x.id===b.dataset.planremove); if(t){ t.planDay=null; t.updatedAt=Date.now(); save(); render(); } });
+  root.querySelectorAll("[data-planopen]").forEach(el=>el.onclick=()=>openTodoInTab(el.dataset.planopen));
+}
+
 /* ============================ VIEW: OVERVIEW ============================ */
 function viewOverview(){
   const open=S.todos.filter(t=>todoOpen(t));
@@ -1636,7 +1714,9 @@ function viewOverview(){
 
     ${sprintCardHTML()}
 
-    ${mitStripHTML()}`;
+    ${mitStripHTML()}
+
+    ${planStripHTML()}`;
 
   // Zeit-Abschnitte: Heute · Morgen · Ab Übermorgen (überfällige zählen zu „Heute")
   const openAll=S.todos.filter(t=>todoOpen(t));
@@ -1661,7 +1741,7 @@ function viewOverview(){
   });
   html+=donePanel(S.todos.filter(t=>todoDone(t)), "overview", true);
 
-  const v=$("#view"); v.innerHTML=html; bindTodos(v); bindDone(v); bindSprint(v); bindMit(v);
+  const v=$("#view"); v.innerHTML=html; bindTodos(v); bindDone(v); bindSprint(v); bindMit(v); bindPlan(v);
   $("#ovBoardToggle").onclick=()=>{ S.ui.ovBoard=!S.ui.ovBoard; save(); render(); };
   // Tagesziel
   const dgToggleFn=()=>{ S.ui.dayGoalCollapsed=!S.ui.dayGoalCollapsed; save(); render(); };
@@ -3432,12 +3512,12 @@ $("#pinSet").onclick=async ()=>{ const inp=$("#pinInput"); const ok=await setPin
 $("#pinClear").onclick=()=>{ clearPin(); const st=$("#pinStatus"); if(st){ st.textContent="Kein PIN gesetzt"; st.style.color="var(--muted)"; } toast("PIN entfernt"); };
 $("#lockGo").onclick=tryUnlock;
 $("#lockPin").addEventListener("keydown",e=>{ if(e.key==="Enter") tryUnlock(); });
-if(document.addEventListener) document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ lockCheck(); syncAutoPull(true); if(captureDayGoal()) render(); } });
+if(document.addEventListener) document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ lockCheck(); syncAutoPull(true); let c=captureDayGoal(); c=rollForwardPlan()||c; if(c) render(); } });
 if(window.addEventListener) window.addEventListener("focus",()=>{ syncAutoPull(true); });
-setInterval(()=>{ if(!document.hidden){ syncAutoPull(); if(captureDayGoal()) render(); } }, 30000);
+setInterval(()=>{ if(!document.hidden){ syncAutoPull(); let c=captureDayGoal(); c=rollForwardPlan()||c; if(c) render(); } }, 30000);
 updateSyncBtn();
 lockCheck();
-captureDayGoal();
+captureDayGoal(); rollForwardPlan();
 if(S.sync&&S.sync.enabled&&S.sync.pass){ (async()=>{ try{ const pr=await syncPull(); if(pr.status==="pulled") render(); else await syncPush(); }catch(e){} })(); }
 if(!SPECIALS_LEFT.some(s=>s.k===S.ui.active) && !SPECIALS_RIGHT.some(s=>s.k===S.ui.active)
    && !(S.ui.active||"").startsWith("area:")) S.ui.active="overview";
@@ -3445,7 +3525,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-12.31";
+const APP_VERSION="2026-09-12.32";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
