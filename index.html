@@ -776,7 +776,7 @@ function addTodo(o){
   const t={id:uid(), areaId:o.areaId, title:o.title, notes:o.notes||"", project:o.project||"",
     priority:o.priority||2, dueDate:o.dueDate||null, followUpDate:o.followUpDate||null,
     done:false, doneAt:null, createdAt:todayStr(), open:false, milestones:[], updatedAt:Date.now(),
-    daily:!!o.daily, dailyUntil:o.dailyUntil||null, dailyLog:{}, delegated:!!o.delegated, repeat:o.repeat||null, attachments:[], mit:!!o.mit};
+    daily:!!o.daily, dailyUntil:o.dailyUntil||null, dailyLog:{}, delegated:!!o.delegated, repeat:o.repeat||null, attachments:[], mit:!!o.mit, planDay:o.planDay||null};
   S.todos.unshift(t); save(); return t;
 }
 /* --- Wiederkehrende To-dos: Frist rückt beim Abhaken zum nächsten Termin vor --- */
@@ -1561,6 +1561,7 @@ function bindMit(root){
 
 /* ============================ TAGESPLAN (kommende Tage, per Hand) ============================ */
 function planDays(){ const out=[]; const d=new Date(todayStr()+"T00:00:00"); while(out.length<4){ if(d.getDay()!==0) out.push(isoLocal(d)); d.setDate(d.getDate()+1); } return out; }
+function planDayOptionsHTML(){ return `<option value="">— kein Tag —</option>`+planDays().map((d,i)=>{ const dd=new Date(d+"T00:00:00"); return `<option value="${d}">${i===0?"Heute · ":""}${WDS[dd.getDay()]} ${dd.getDate()}.${dd.getMonth()+1}.</option>`; }).join(""); }
 function rollForwardPlan(){
   const first=planDays()[0]; let ch=false;
   (S.todos||[]).forEach(t=>{ if(t.planDay && !todoDone(t) && t.planDay<first){ t.planDay=first; t.updatedAt=Date.now(); ch=true; } });
@@ -1704,6 +1705,7 @@ function viewOverview(){
             <select id="qRepeat"><option value="">Keine</option><option value="week">Wöchentlich</option><option value="month">Monatlich</option><option value="quarter">Vierteljährlich</option><option value="year">Jährlich</option></select></div>
           <div class="field"><label>Frist (erledigt bis)</label><input type="date" id="qdue"></div>
           <div class="field"><label>Nachhaken am</label><input type="date" id="qFollow"></div>
+          <div class="field"><label>Tag (Tagesplan)</label><select id="qPlan">${planDayOptionsHTML()}</select></div>
         </div>
         <div class="field"><label>Notiz</label><textarea id="qNotes" placeholder="Notizen…"></textarea></div>
         <button class="btn" id="qaddBtn" style="width:100%">To-do hinzufügen</button>
@@ -1765,7 +1767,8 @@ function viewOverview(){
     addTodo({title:val, priority:+($("#qPrio")&&$("#qPrio").value)||2, areaId,
       project:($("#qProj")?$("#qProj").value.trim():""),
       dueDate:$("#qdue").value||null, followUpDate:($("#qFollow")?$("#qFollow").value||null:null),
-      notes:($("#qNotes")?$("#qNotes").value.trim():""), repeat:presetToRepeat($("#qRepeat")?$("#qRepeat").value:"")});
+      notes:($("#qNotes")?$("#qNotes").value.trim():""), repeat:presetToRepeat($("#qRepeat")?$("#qRepeat").value:""),
+      planDay:($("#qPlan")?$("#qPlan").value||null:null)});
     q.value=""; toast("To-do angelegt"); render(); };
   qb.onclick=doQ; q.onkeydown=e=>{ if(e.key==="Enter") doQ(); };
   const rn=$("#remNew"); if(rn) rn.onclick=rerollReminder;
@@ -1838,6 +1841,7 @@ function viewArea(id){
           <div class="field"><label>Nachhaken am</label><input type="date" id="ntFollow"></div>
           <div class="field"><label>Wiederholung</label>
             <select id="ntRepeat"><option value="">Keine</option><option value="week">Wöchentlich</option><option value="month">Monatlich</option><option value="quarter">Vierteljährlich</option><option value="year">Jährlich</option></select></div>
+          <div class="field"><label>Tag (Tagesplan)</label><select id="ntPlan">${planDayOptionsHTML()}</select></div>
         </div>
         <div class="field"><label>Notiz</label><textarea id="ntNotes" placeholder="Notizen…"></textarea></div>
         <button class="btn" id="ntAdd" style="width:100%">To-do hinzufügen</button>
@@ -1895,7 +1899,8 @@ function viewArea(id){
     const title=$("#ntTitle").value.trim(); if(!title){ toast("Titel fehlt"); return; }
     addTodo({title, priority:+$("#ntPrio").value, project:$("#ntProj").value.trim(),
       dueDate:$("#ntDue").value||null, followUpDate:$("#ntFollow").value||null, areaId:id,
-      notes:($("#ntNotes")?$("#ntNotes").value.trim():""), repeat:presetToRepeat($("#ntRepeat")?$("#ntRepeat").value:"")});
+      notes:($("#ntNotes")?$("#ntNotes").value.trim():""), repeat:presetToRepeat($("#ntRepeat")?$("#ntRepeat").value:""),
+      planDay:($("#ntPlan")?$("#ntPlan").value||null:null)});
     toast("Hinzugefügt"); render();
   };
   $("#ntTitle").onkeydown=e=>{ if(e.key==="Enter") $("#ntAdd").click(); };
@@ -3525,7 +3530,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-12.32";
+const APP_VERSION="2026-09-12.33";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
