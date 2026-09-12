@@ -1609,19 +1609,27 @@ function viewOverview(){
 
     <div class="card">
       <div class="row center" style="justify-content:space-between; gap:8px; cursor:pointer" id="qHead">
-        <h3 style="margin:0">Schnell-Eingabe</h3>
+        <h3 style="margin:0">Neues To-do</h3>
         <button class="btn ghost sm" id="qToggle">${qCollapsed?"▾ ausklappen":"▴ einklappen"}</button>
       </div>
       <div id="qBody" style="${qCollapsed?"display:none":"margin-top:10px"}">
-        <div class="field"><input id="qadd" placeholder="Was ist zu tun?" autocomplete="off"></div>
+        <div class="field"><input id="qadd" placeholder="Titel…" autocomplete="off"></div>
         <div class="grid2">
-          <div class="field"><label>Frist (erledigt bis)</label><input type="date" id="qdue"></div>
+          <div class="field"><label>Wichtigkeit</label>
+            <select id="qPrio"><option value="3">Hoch</option><option value="2" selected>Mittel</option><option value="1">Niedrig</option></select></div>
+          <div class="field"><label>Bereich</label>
+            <select id="qArea"><option value="">📥 Eingang</option>${S.areas.filter(x=>x.id!=="a_eingang").map(x=>`<option value="${x.id}">${esc(x.icon||"")} ${esc(x.name)}</option>`).join("")}</select></div>
+          <div class="field"><label>Projekt (optional)</label>
+            <input id="qProj" list="ovProjList" placeholder="Projekt (auch aus anderen Tabs)">
+            <datalist id="ovProjList">${[...new Set(S.todos.filter(t=>t.project).map(t=>t.project).concat(S.areas.map(x=>x.name)))].sort().map(p=>`<option value="${esc(p)}">`).join("")}</datalist></div>
           <div class="field"><label>Wiederholung</label>
             <select id="qRepeat"><option value="">Keine</option><option value="week">Wöchentlich</option><option value="month">Monatlich</option><option value="quarter">Vierteljährlich</option><option value="year">Jährlich</option></select></div>
+          <div class="field"><label>Frist (erledigt bis)</label><input type="date" id="qdue"></div>
+          <div class="field"><label>Nachhaken am</label><input type="date" id="qFollow"></div>
         </div>
         <div class="field"><label>Notiz</label><textarea id="qNotes" placeholder="Notizen…"></textarea></div>
-        <button class="btn" id="qaddBtn" style="width:100%">Hinzufügen</button>
-        <div class="tiny muted" style="margin-top:8px">Landet als wichtiges To-do im Eingang. Für mehr Details → Chat 💬</div>
+        <button class="btn" id="qaddBtn" style="width:100%">To-do hinzufügen</button>
+        <div class="tiny muted" style="margin-top:8px">Ohne Bereich landet es im Eingang. Für Sprache/Freitext → Chat 💬</div>
       </div>
     </div>
     </div>
@@ -1673,8 +1681,10 @@ function viewOverview(){
   const qt=$("#qToggle"); if(qt) qt.onclick=(e)=>{ e.stopPropagation(); qToggleFn(); };
   const q=$("#qadd"), qb=$("#qaddBtn");
   const doQ=()=>{ const val=q.value.trim(); if(!val) return;
-    const due=$("#qdue").value||null;
-    addTodo({title:val, priority:3, dueDate:due, areaId:ensureInbox().id,
+    const areaId=($("#qArea")&&$("#qArea").value) ? $("#qArea").value : ensureInbox().id;
+    addTodo({title:val, priority:+($("#qPrio")&&$("#qPrio").value)||2, areaId,
+      project:($("#qProj")?$("#qProj").value.trim():""),
+      dueDate:$("#qdue").value||null, followUpDate:($("#qFollow")?$("#qFollow").value||null:null),
       notes:($("#qNotes")?$("#qNotes").value.trim():""), repeat:presetToRepeat($("#qRepeat")?$("#qRepeat").value:"")});
     q.value=""; toast("To-do angelegt"); render(); };
   qb.onclick=doQ; q.onkeydown=e=>{ if(e.key==="Enter") doQ(); };
@@ -3435,7 +3445,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-09.30";
+const APP_VERSION="2026-09-12.31";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
