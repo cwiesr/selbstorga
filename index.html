@@ -3263,7 +3263,10 @@ function partRow(pt,i){
     <select data-pf="playerId">${_partOptions(pt.playerId)}</select>
     <input type="number" min="0" step="1" data-pf="price" value="${pt.price!=null&&pt.price!==""?pt.price:""}" placeholder="€">
     <select data-pf="method">${PAY_METHODS.map(m=>`<option value="${m}" ${pt.method===m?"selected":""}>${m}</option>`).join("")}</select>
-    <button class="btn ghost sm" data-prem="${i}" title="Teilnehmer entfernen">✕</button>
+    <span style="display:flex; gap:4px; flex:0 0 auto">
+      <button class="btn ghost sm" data-pmake="${i}" title="Aus dem Namen einen Spieler anlegen">＋👤</button>
+      <button class="btn ghost sm" data-prem="${i}" title="Teilnehmer entfernen">✕</button>
+    </span>
   </div>`;
 }
 function renderLessonEditor(){
@@ -3309,6 +3312,16 @@ function bindLessonEditor(){
   const d=_lessonDraft;
   $("#lsAddPart").onclick=()=>{ _collectLesson(); d.participants.push(defaultParticipant()); renderLessonEditor(); };
   $("#lsParts").querySelectorAll("[data-prem]").forEach(b=>b.onclick=()=>{ _collectLesson(); d.participants.splice(+b.dataset.prem,1); renderLessonEditor(); });
+  $("#lsParts").querySelectorAll("[data-pmake]").forEach(b=>b.onclick=()=>{
+    _collectLesson(); const pt=d.participants[+b.dataset.pmake]; if(!pt) return;
+    if(pt.playerId){ toast("Ist schon ein angelegter Spieler"); return; }
+    const nm=(pt.name||"").trim(); if(!nm){ toast("Erst einen Namen eingeben"); return; }
+    let p=(S.players||[]).find(x=>x.name.toLowerCase()===nm.toLowerCase());
+    if(p) toast(`„${p.name}" zugeordnet`);
+    else { p={id:uid(), name:nm, rate:parseFloat(pt.price)||0, notes:"", topups:[], updatedAt:Date.now()}; S.players.unshift(p); toast(`Spieler „${nm}" angelegt ✓`); }
+    pt.playerId=p.id; pt.name=""; if(!pt.price) pt.price=p.rate||0;
+    save(); renderLessonEditor();
+  });
   $("#lsParts").querySelectorAll('[data-pf="playerId"]').forEach(sel=>sel.onchange=()=>{ _collectLesson(); const i=+sel.closest(".part-row").dataset.pi; const p=playerById(sel.value); if(p && !d.participants[i].price) d.participants[i].price=p.rate||0; renderLessonEditor(); });
   const del=$("#lsDelete"); if(del) del.onclick=async ()=>{ if(!await uiConfirm("Diese Stunde löschen?","Löschen")) return; tombstone("lessons",d.id); S.lessons=S.lessons.filter(l=>l.id!==d.id); closeLesson(); save(); render(); toast("Stunde gelöscht"); };
   $("#lsSave").onclick=()=>{ _collectLesson(); d.participants=d.participants.filter(pt=>pt.playerId||(pt.name&&pt.name.trim())); saveLesson(); };
@@ -3598,7 +3611,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-14.37";
+const APP_VERSION="2026-09-14.38";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
