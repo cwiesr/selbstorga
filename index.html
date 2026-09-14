@@ -184,7 +184,7 @@
   .htab{padding:7px 12px; border-radius:999px; background:var(--panel); border:1px solid var(--border); color:var(--muted); font-size:13px; cursor:pointer}
   .htab.on{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600}
   .prow{display:flex; align-items:center; gap:8px; padding:9px 10px; border:1px solid var(--border); border-radius:10px; background:var(--panel); margin-bottom:6px}
-  .part-row{display:grid; grid-template-columns:1fr 76px 1fr auto; gap:6px; align-items:center; margin-bottom:6px}
+  .part-row{display:grid; grid-template-columns:1fr 1fr 72px 1fr auto; gap:6px; align-items:center; margin-bottom:6px}
   .part-row input, .part-row select{min-height:38px}
   @media(max-width:520px){ .part-row{grid-template-columns:1fr 1fr; } }
   .paychip{font-size:11px; padding:2px 7px; border-radius:999px; border:1px solid var(--border)}
@@ -3135,7 +3135,7 @@ function lessonChip(l){
   const parts=l.participants||[];
   const allPaid=parts.length && parts.every(isPaid);
   const someUnpaid=parts.some(pt=>!isPaid(pt));
-  const pnames=parts.map(pt=>{ const p=playerById(pt.playerId); return p?esc(p.name.split(" ")[0]):"?"; });
+  const pnames=parts.map(pt=>{ const p=playerById(pt.playerId); if(p) return esc(p.name.split(" ")[0]); return pt.name?esc(pt.name):"?"; });
   if(l.group) pnames.unshift(esc(l.group));
   const names=pnames.join(", ");
   const cls=parts.length ? (allPaid?"allpaid":(someUnpaid?"unpaid":"")) : "";
@@ -3197,13 +3197,15 @@ function hoursUnpaidHTML(){
   const rows=[];
   (S.lessons||[]).forEach(l=>{ (l.participants||[]).forEach(pt=>{ if(!isPaid(pt)) rows.push({l,pt}); }); });
   if(!rows.length) return `<div class="empty">Keine offenen Zahlungen 🎉</div>`;
-  const byP={}; rows.forEach(r=>{ const pid=r.pt.playerId||"?"; (byP[pid]=byP[pid]||[]).push(r); });
+  const byP={}; rows.forEach(r=>{ const key=r.pt.playerId||("free:"+((r.pt.name||"").trim()||"?")); (byP[key]=byP[key]||[]).push(r); });
   const total=rows.reduce((s,r)=>s+(parseFloat(r.pt.price)||0),0);
   let h=`<div class="view-sub" style="margin-bottom:10px">${rows.length} offene Position(en) · gesamt <b style="color:var(--warn)">${total} €</b></div>`;
-  Object.keys(byP).forEach(pid=>{
-    const p=playerById(pid); const list=byP[pid];
+  Object.keys(byP).forEach(key=>{
+    const list=byP[key];
+    const p=key.startsWith("free:")?null:playerById(key);
+    const label=p?esc(p.name):(key==="free:?"?"Unbekannt":esc(key.slice(5)));
     const sum=list.reduce((s,r)=>s+(parseFloat(r.pt.price)||0),0);
-    h+=`<div class="card"><div class="row center" style="justify-content:space-between"><b>${p?esc(p.name):"Unbekannt"}</b><b style="color:var(--warn)">${sum} € offen</b></div>
+    h+=`<div class="card"><div class="row center" style="justify-content:space-between"><b>${label}</b><b style="color:var(--warn)">${sum} € offen</b></div>
       <div style="margin-top:6px">${list.map(r=>`<div class="prow" data-lesson="${r.l.id}" style="cursor:pointer">
         <div class="grow"><div>${fmtDate(r.l.date)} ${esc(r.l.time||"")} · ${esc(r.l.title||"Stunde")}</div></div>
         <span class="paychip open">${parseFloat(r.pt.price)||0} € offen</span>
@@ -3244,7 +3246,7 @@ async function delPlayer(id){ const p=playerById(id); if(!p) return;
 }
 /* ---- Stunden-Editor (Sheet) ---- */
 let _lessonDraft=null;
-function defaultParticipant(){ const first=(S.players||[])[0]; return {playerId:first?first.id:"", price:first?(first.rate||0):0, method:"Offen"}; }
+function defaultParticipant(){ const first=(S.players||[])[0]; return {playerId:first?first.id:"", name:"", price:first?(first.rate||0):0, method:"Offen"}; }
 function openLesson(id, presetDate, presetHour){
   const existing = id ? (S.lessons||[]).find(l=>l.id===id) : null;
   _lessonDraft = existing ? JSON.parse(JSON.stringify(existing)) : {
@@ -3254,9 +3256,10 @@ function openLesson(id, presetDate, presetHour){
   renderLessonEditor();
   $("#lessonSheet").classList.add("open");
 }
-function _partOptions(sel){ return `<option value="">— Spieler wählen —</option>`+[...(S.players||[])].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${p.id}" ${p.id===sel?"selected":""}>${esc(p.name)} · ${playerCredit(p.id)} Std</option>`).join(""); }
+function _partOptions(sel){ return `<option value="">— Spieler (optional) —</option>`+[...(S.players||[])].sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${p.id}" ${p.id===sel?"selected":""}>${esc(p.name)} · ${playerCredit(p.id)} Std</option>`).join(""); }
 function partRow(pt,i){
   return `<div class="part-row" data-pi="${i}">
+    <input data-pf="name" value="${esc(pt.name||"")}" placeholder="Name (Freitext)">
     <select data-pf="playerId">${_partOptions(pt.playerId)}</select>
     <input type="number" min="0" step="1" data-pf="price" value="${pt.price!=null&&pt.price!==""?pt.price:""}" placeholder="€">
     <select data-pf="method">${PAY_METHODS.map(m=>`<option value="${m}" ${pt.method===m?"selected":""}>${m}</option>`).join("")}</select>
@@ -3277,7 +3280,7 @@ function renderLessonEditor(){
     </div>
     <div class="field"><label>Spieler / Gruppe (Freitext)</label><input id="lsGroup" value="${esc(d.group||"")}" placeholder="z.B. Anna &amp; Ben, U12-Gruppe, Herrenmannschaft"></div>
     ${noPlayers?`<div class="tiny muted" style="margin:6px 0">Noch keine Spieler angelegt – im Reiter „👥 Spieler" anlegen, dann hier zuordnen.</div>`:""}
-    <div style="margin-top:6px"><label class="tiny muted">Teilnehmer · Preis · Zahlart (Guthaben zieht automatisch ${lessonHours(d)} Std ab)</label>
+    <div style="margin-top:6px"><label class="tiny muted">Name (Freitext) und/oder Spieler · Preis · Zahlart (Guthaben zieht automatisch ${lessonHours(d)} Std ab)</label>
       <div id="lsParts">${(d.participants||[]).map((pt,i)=>partRow(pt,i)).join("")}</div>
       <button class="btn sec sm" id="lsAddPart" style="margin-top:6px">＋ Teilnehmer</button>
     </div>
@@ -3295,9 +3298,10 @@ function _collectLesson(){
   const parts=[];
   $("#lsParts").querySelectorAll(".part-row").forEach(row=>{
     const pid=row.querySelector('[data-pf="playerId"]').value;
+    const name=(row.querySelector('[data-pf="name"]')?.value||"").trim();
     const price=parseFloat(row.querySelector('[data-pf="price"]').value)||0;
     const method=row.querySelector('[data-pf="method"]').value||"Offen";
-    parts.push({playerId:pid, price, method});
+    parts.push({playerId:pid, name, price, method});
   });
   d.participants=parts;
 }
@@ -3307,7 +3311,7 @@ function bindLessonEditor(){
   $("#lsParts").querySelectorAll("[data-prem]").forEach(b=>b.onclick=()=>{ _collectLesson(); d.participants.splice(+b.dataset.prem,1); renderLessonEditor(); });
   $("#lsParts").querySelectorAll('[data-pf="playerId"]').forEach(sel=>sel.onchange=()=>{ _collectLesson(); const i=+sel.closest(".part-row").dataset.pi; const p=playerById(sel.value); if(p && !d.participants[i].price) d.participants[i].price=p.rate||0; renderLessonEditor(); });
   const del=$("#lsDelete"); if(del) del.onclick=async ()=>{ if(!await uiConfirm("Diese Stunde löschen?","Löschen")) return; tombstone("lessons",d.id); S.lessons=S.lessons.filter(l=>l.id!==d.id); closeLesson(); save(); render(); toast("Stunde gelöscht"); };
-  $("#lsSave").onclick=()=>{ _collectLesson(); d.participants=d.participants.filter(pt=>pt.playerId); saveLesson(); };
+  $("#lsSave").onclick=()=>{ _collectLesson(); d.participants=d.participants.filter(pt=>pt.playerId||(pt.name&&pt.name.trim())); saveLesson(); };
 }
 function saveLesson(){
   const d=_lessonDraft; const isNew=!!d._new; delete d._new; d.updatedAt=Date.now();
@@ -3594,7 +3598,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-14.36";
+const APP_VERSION="2026-09-14.37";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
