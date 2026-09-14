@@ -169,9 +169,12 @@
   .hcal-wrap{width:calc(100vw - 20px); margin-left:calc(50% - 50vw + 10px); overflow-x:auto; padding:0 10px 10px}
   .hcal{display:grid; grid-template-columns:52px repeat(7, minmax(120px,1fr)); gap:1px; background:var(--border); border:1px solid var(--border); border-radius:10px; overflow:hidden; min-width:760px}
   .hcal .hc{background:var(--panel); padding:4px}
-  .hcal .hc-head{background:var(--panel2); font-weight:700; font-size:12px; text-align:center; padding:6px 4px; position:sticky; top:0}
+  .hcal .hc-head{background:var(--panel2); font-weight:700; font-size:12px; text-align:center; padding:6px 4px; position:sticky; top:0; z-index:3}
   .hcal .hc-head.today{color:var(--accent)}
-  .hcal .hc-time{background:var(--panel2); font-size:11px; color:var(--muted); text-align:right; padding:4px 6px}
+  /* Uhrzeit-Spalte links fixiert, damit sie beim horizontalen Scrollen sichtbar bleibt */
+  .hcal .hc-time{background:var(--panel2); font-size:11px; color:var(--muted); text-align:right; padding:4px 6px;
+    position:sticky; left:0; z-index:2; box-shadow:1px 0 0 var(--border)}
+  .hcal .hc-head:first-child{position:sticky; left:0; top:0; z-index:5; box-shadow:1px 0 0 var(--border)}
   .hcal .hc-slot{min-height:42px; cursor:pointer; display:flex; flex-direction:column; gap:2px}
   .hcal .hc-slot:hover{background:var(--panel2)}
   .lchip{background:var(--accent-dim); border:1px solid var(--accent); border-radius:6px; padding:2px 5px; font-size:11px; line-height:1.25; cursor:pointer; color:var(--text)}
@@ -3132,7 +3135,9 @@ function lessonChip(l){
   const parts=l.participants||[];
   const allPaid=parts.length && parts.every(isPaid);
   const someUnpaid=parts.some(pt=>!isPaid(pt));
-  const names=parts.map(pt=>{ const p=playerById(pt.playerId); return p?esc(p.name.split(" ")[0]):"?"; }).join(", ");
+  const pnames=parts.map(pt=>{ const p=playerById(pt.playerId); return p?esc(p.name.split(" ")[0]):"?"; });
+  if(l.group) pnames.unshift(esc(l.group));
+  const names=pnames.join(", ");
   const cls=parts.length ? (allPaid?"allpaid":(someUnpaid?"unpaid":"")) : "";
   return `<div class="lchip ${cls}" data-lesson="${l.id}">${esc(l.time||"")} ${esc(l.title||"Stunde")}${names?` · ${names}`:""}</div>`;
 }
@@ -3270,6 +3275,7 @@ function renderLessonEditor(){
       </select></div>
       <div class="field"><label>Titel / Art</label><input id="lsTitle" value="${esc(d.title||"")}" placeholder="z.B. Einzel, Gruppe, Kids"></div>
     </div>
+    <div class="field"><label>Spieler / Gruppe (Freitext)</label><input id="lsGroup" value="${esc(d.group||"")}" placeholder="z.B. Anna &amp; Ben, U12-Gruppe, Herrenmannschaft"></div>
     ${noPlayers?`<div class="tiny muted" style="margin:6px 0">Noch keine Spieler angelegt – im Reiter „👥 Spieler" anlegen, dann hier zuordnen.</div>`:""}
     <div style="margin-top:6px"><label class="tiny muted">Teilnehmer · Preis · Zahlart (Guthaben zieht automatisch ${lessonHours(d)} Std ab)</label>
       <div id="lsParts">${(d.participants||[]).map((pt,i)=>partRow(pt,i)).join("")}</div>
@@ -3285,6 +3291,7 @@ function _collectLesson(){
   const d=_lessonDraft;
   d.date=$("#lsDate").value||d.date; d.time=$("#lsTime").value||d.time;
   d.durationMin=+$("#lsDur").value||60; d.title=$("#lsTitle").value.trim();
+  const g=$("#lsGroup"); if(g) d.group=g.value.trim();
   const parts=[];
   $("#lsParts").querySelectorAll(".part-row").forEach(row=>{
     const pid=row.querySelector('[data-pf="playerId"]').value;
@@ -3587,7 +3594,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-12.35";
+const APP_VERSION="2026-09-14.36";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
