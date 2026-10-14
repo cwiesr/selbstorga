@@ -1584,11 +1584,18 @@ function bindMit(root){
 /* ============================ TAGESPLAN (kommende Tage, per Hand) ============================ */
 function planDays(){ const out=[]; const d=new Date(todayStr()+"T00:00:00"); while(out.length<4){ if(d.getDay()!==0) out.push(isoLocal(d)); d.setDate(d.getDate()+1); } return out; }
 function planDayOptionsHTML(){ return `<option value="">— kein Tag —</option>`+planDays().map((d,i)=>{ const dd=new Date(d+"T00:00:00"); return `<option value="${d}">${i===0?"Heute · ":""}${WDS[dd.getDay()]} ${dd.getDate()}.${dd.getMonth()+1}.</option>`; }).join(""); }
+let _planDayMark=todayStr();
 function rollForwardPlan(){
-  const first=planDays()[0]; let ch=false;
-  (S.todos||[]).forEach(t=>{ if(t.planDay && !todoDone(t) && t.planDay<first){ t.planDay=first; t.updatedAt=Date.now(); ch=true; } });
-  if(ch) save();
-  return ch;
+  // Früher wurde planDay überfälliger To-dos auf heute umgeschrieben + neu gestempelt.
+  // Das führte zu einem Sync-Rennen (erledigte To-dos kamen zurück). Jetzt passiert das
+  // Vorrücken nur noch in der Anzeige (planStripHTML). Hier melden wir nur den Tageswechsel,
+  // damit die Tagesplan-Spalten dann neu gezeichnet werden. Keine Datenänderung, kein save().
+  const t=todayStr(); if(t!==_planDayMark){ _planDayMark=t; return true; } return false;
+}
+// Im Tagesplan für heute ausblenden, wenn für diesen Zyklus erledigt (ohne es anderswo verschwinden zu lassen)
+function planCovered(t){
+  if(t.repeat && t.repeat.unit) return t.repeatLastDone===todayStr(); // heute abgehakt → heute weg, kehrt erst zum nächsten Termin zurück
+  return todoDone(t); // normal: erledigt; täglich: heute erledigt/abgelaufen
 }
 function planChip(t){
   return `<div class="plan-chip" draggable="true" data-planchip="${t.id}">
@@ -1602,7 +1609,12 @@ function planStripHTML(){
   let h=`<div class="plan-wrap"><div class="plan-head-row">🗓 Tagesplan <span class="tiny muted" style="font-weight:400">— To-dos per Hand auf die Tage ziehen (bleiben zusätzlich in der Prio-Liste)</span></div><div class="plan-board">`;
   days.forEach((d,i)=>{
     const dd=new Date(d+"T00:00:00");
-    const items=(S.todos||[]).filter(t=>t.planDay===d && !todoDone(t)).sort((a,b)=>urgency(b)-urgency(a));
+    // Heute-Spalte (i===0): auch überfällige offene Plan-To-dos (planDay<=heute) – rein in der Anzeige.
+    // Zukünftige Spalten: nur exakt dieser Tag. So erscheint jedes offene Plan-To-do in genau einer Spalte.
+    const items=(S.todos||[]).filter(t=>{
+      if(!t.planDay || planCovered(t)) return false;
+      return i===0 ? t.planDay<=d : t.planDay===d;
+    }).sort((a,b)=>urgency(b)-urgency(a));
     h+=`<div class="plan-col" data-planday="${d}">
       <div class="plan-col-head">${i===0?"Heute · ":""}${WDS[dd.getDay()]} ${dd.getDate()}.${dd.getMonth()+1}. <span class="tiny muted">${items.length}</span></div>
       <div class="plan-col-body">${items.map(planChip).join("")||`<div class="tiny muted" style="padding:6px 4px">Hierher ziehen …</div>`}</div>
@@ -3611,7 +3623,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-09-14.38";
+const APP_VERSION="2026-10-14.39";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
