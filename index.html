@@ -624,7 +624,7 @@ function save(){
 function ensureState(){
   const defs={ mindAnswers:{}, mindDayQ:{}, mindDayR:{}, mindDayQuote:{}, mindAskedQ:[], mindAskedR:[],
     mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{},
-    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[], tabLabels:{}, dayGoalLog:{}, players:[], lessons:[], sprints:[],
+    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], relationship:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[], tabLabels:{}, dayGoalLog:{}, players:[], lessons:[], sprints:[],
     sync:{enabled:false, pass:"", apiBase:""} };
   // Tagesziel jetzt geräteübergreifend (aus altem lokalem S.ui übernehmen)
   if(S.ui){ if(S.dayGoal==null && S.ui.dayGoal!=null) S.dayGoal=S.ui.dayGoal; if(S.dayGoalManual==null && S.ui.dayGoalManual!=null) S.dayGoalManual=S.ui.dayGoalManual; }
@@ -884,6 +884,7 @@ const SPECIALS_RIGHT=[
   {k:"guide",    icon:"🧭", name:"Leitfaden"},
   {k:"ideas",    icon:"💡", name:"Ideen"},
   {k:"thoughts", icon:"💭", name:"Gedanken"},
+  {k:"relationship", icon:"💞", name:"Beziehung"},
   {k:"bookmarks",icon:"🔖", name:"Lesezeichen"},
   {k:"wishes",   icon:"🌟", name:"Wünsche"},
   {k:"hours",    icon:"🎾", name:"Stundendoku"},
@@ -976,6 +977,7 @@ function render(){
   if(k==="goals")    return viewGoals();
   if(k==="bookmarks")return viewBookmarks();
   if(k==="thoughts") return viewThoughts();
+  if(k==="relationship") return viewRelationship();
   if(k==="guide")    return viewGuide();
   if(k==="hours")    return viewHours();
   if(k==="chat")     return viewChat();
@@ -3066,6 +3068,67 @@ function viewThoughts(){
   });
 }
 
+/* ============================ VIEW: BEZIEHUNG ============================ */
+function viewRelationship(){
+  const items=S.relationship||(S.relationship=[]);
+  const tags=[...new Set(items.map(t=>t.tag).filter(Boolean))].sort();
+  const filter=S.ui.relTag||"alle";
+  let list=items.slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
+  if(filter!=="alle") list=list.filter(t=>t.tag===filter);
+
+  let html=`<div class="view-title">💞 ${esc(tabName("relationship"))}</div>
+    <div class="view-sub">Gedanken &amp; Ideen für deine Beziehung festhalten.</div>
+    <div class="card">
+      <h3>Neuer Eintrag</h3>
+      <div class="field"><textarea id="relText" placeholder="Gedanke oder Idee für die Beziehung…" style="min-height:80px"></textarea></div>
+      <div class="row">
+        <input id="relTag" class="grow" placeholder="Tag (optional, z.B. Date-Idee, Gespräch, Geschenk)" list="relTagList">
+        <button class="btn" id="relAdd">Speichern</button>
+      </div>
+      <datalist id="relTagList">${tags.map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+    </div>`;
+
+  if(tags.length){
+    html+=`<div class="catrow">
+      <button class="catchip ${filter==="alle"?"on":""}" data-reltag="alle">Alle</button>
+      ${tags.map(t=>`<button class="catchip ${filter===t?"on":""}" data-reltag="${esc(t)}">${esc(t)}</button>`).join("")}
+    </div>`;
+  }
+
+  if(!list.length){ html+=`<div class="empty">Noch keine Einträge. Halte den ersten Gedanken für deine Beziehung fest 💞</div>`; }
+  list.forEach(t=>{
+    if(S.ui.editRel===t.id){
+      html+=`<div class="card" data-rel="${t.id}">
+        <div class="field"><textarea data-reledit style="min-height:80px">${esc(t.text)}</textarea></div>
+        <div class="row"><input data-reledittag class="grow" placeholder="Tag (optional)" value="${esc(t.tag||"")}">
+          <button class="btn sm" data-relsave>Speichern</button>
+          <button class="btn sec sm" data-relcancel>Abbr.</button></div>
+      </div>`;
+    } else {
+      html+=`<div class="card" data-rel="${t.id}">
+        <div style="white-space:pre-wrap; word-break:break-word">${esc(t.text)}</div>
+        <div class="row center" style="justify-content:space-between; gap:8px; margin-top:8px">
+          <span class="tiny muted">${new Date(t.ts).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}${t.tag?` · ${esc(t.tag)}`:""}</span>
+          <div class="row"><button class="btn ghost sm" data-reledbtn>✏️</button><button class="btn ghost sm" data-reldel>✕</button></div>
+        </div>
+      </div>`;
+    }
+  });
+
+  const v=$("#view"); v.innerHTML=html;
+  const add=()=>{ const tx=$("#relText").value.trim(); if(!tx){ toast("Eintrag fehlt"); return; }
+    S.relationship.unshift({id:uid(), text:tx, tag:$("#relTag").value.trim(), ts:Date.now(), updatedAt:Date.now()}); save(); render(); toast("Gespeichert 💞"); };
+  $("#relAdd").onclick=add;
+  v.querySelectorAll("[data-reltag]").forEach(b=>b.onclick=()=>{ S.ui.relTag=b.dataset.reltag; save(); render(); });
+  v.querySelectorAll("[data-rel]").forEach(card=>{
+    const id=card.dataset.rel; const t=S.relationship.find(x=>x.id===id); if(!t) return;
+    const del=card.querySelector("[data-reldel]"); if(del) del.onclick=()=>{ uiConfirm("Diesen Eintrag löschen?","Löschen").then(ok=>{ if(ok){ tombstone("relationship",id); S.relationship=S.relationship.filter(x=>x.id!==id); save(); render(); } }); };
+    const edb=card.querySelector("[data-reledbtn]"); if(edb) edb.onclick=()=>{ S.ui.editRel=id; render(); };
+    const sv=card.querySelector("[data-relsave]"); if(sv) sv.onclick=()=>{ const nv=card.querySelector("[data-reledit]").value.trim(); if(!nv){ toast("Text fehlt"); return; } t.text=nv; t.tag=card.querySelector("[data-reledittag]").value.trim(); t.updatedAt=Date.now(); S.ui.editRel=null; save(); render(); toast("Gespeichert"); };
+    const cn=card.querySelector("[data-relcancel]"); if(cn) cn.onclick=()=>{ S.ui.editRel=null; render(); };
+  });
+}
+
 /* ============================ VIEW: LEBENSLEITFADEN ============================ */
 function guideText(){
   const vals=collectValues();
@@ -3358,7 +3421,7 @@ function syncApiURL(){ const b=(S.sync&&S.sync.apiBase&&S.sync.apiBase.trim())||
 function stateWeight(s){ if(!s) return 0; return (s.todos?s.todos.length:0)+(s.goals?s.goals.length:0)+(s.bookmarks?s.bookmarks.length:0)+(s.ideas?s.ideas.length:0)+(s.wishes?s.wishes.length:0)+(s.myThoughts?s.myThoughts.length:0)+(s.thoughts?s.thoughts.length:0)+(s.mindAnswers?Object.keys(s.mindAnswers).length:0)+(s.mood?Object.keys(s.mood).length:0)+(s.areas&&s.areas.length>2?s.areas.length-2:0); }
 
 /* ---- Zusammenführung (Merge) auf Eintrags-Ebene ---- */
-const LIST_COLLS=["todos","goals","bookmarks","ideas","wishes","thoughts","myThoughts","areas","routines","players","lessons","sprints"];
+const LIST_COLLS=["todos","goals","bookmarks","ideas","wishes","thoughts","relationship","myThoughts","areas","routines","players","lessons","sprints"];
 const MAP_COLLS=["mindAnswers","mindDayQ","mindDayR","mindDayQuote","valuesDayQ","valuesAns","dayGoalLog"];
 function _itemTime(it){ return (it&&(it.updatedAt||0))||0; }
 function mergeList(localArr, remoteArr, localTomb, remoteTomb, tombAcc){
@@ -3623,7 +3686,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-10-14.39";
+const APP_VERSION="2026-10-22.40";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
