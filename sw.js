@@ -51,3 +51,23 @@ self.addEventListener("fetch", (e) => {
     }).catch(() => m))
   );
 });
+
+/* ---- Web Push: Erinnerungen aus dem Bereich Leben; ein Tipp öffnet direkt die passende Aktion ---- */
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) { data = { title: "Selbstorga", body: event.data ? event.data.text() : "" }; }
+  event.waitUntil(self.registration.showNotification(data.title || "Selbstorga", {
+    body: data.body || "",
+    tag: data.tag || "selbstorga",
+    data: { url: data.url || "/" },
+  }));
+});
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL((event.notification.data && event.notification.data.url) || "/", self.location.origin).href;
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of all) { if ("navigate" in c) { await c.navigate(target); return c.focus(); } }
+    return self.clients.openWindow(target);
+  })());
+});

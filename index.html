@@ -41,6 +41,32 @@
     display:grid;place-items:center;color:#fff;font-size:16px}
   .brand small{font-weight:500; color:var(--muted); font-size:12px}
 
+  /* Bereich Leben: ruhigere Farbwelt, kein Blau der Arbeitswelt */
+  body.life{--accent:#46c98b; --accent-dim:#1f3a2f}
+  body.life .topbar{border-bottom-color:#1f3a2f}
+  body.life .brand .logo{background:#46c98b; color:#04231b}
+  .modebtn{background:var(--panel2); border:1px solid var(--border); color:var(--text); font-weight:600}
+  .life-q{font-size:21px; font-weight:700; line-height:1.3; margin:4px 0 12px}
+  .life-card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px}
+  .life-card h3{margin:0 0 8px; font-size:12px; letter-spacing:.4px; text-transform:uppercase; color:var(--muted)}
+  .countdown{font-size:34px; font-weight:800; line-height:1}
+  .yesno{display:flex; gap:8px}
+  .yesno button{flex:1; padding:12px 0; border-radius:12px; background:var(--panel2); border:1px solid var(--border); color:var(--text); font-weight:600}
+  .yesno button.on{background:var(--accent); border-color:var(--accent); color:#04231b}
+  .tri{display:flex; gap:8px; margin-top:10px}
+  .tri button{flex:1; padding:9px 4px; border-radius:10px; background:var(--panel2); border:1px solid var(--border); color:var(--muted); font-size:13px}
+  .tri button.on{background:var(--accent-dim); border-color:var(--accent); color:var(--text)}
+  .propose{border:1px solid var(--accent); background:var(--accent-dim); border-radius:12px; padding:12px; margin-top:10px}
+  .propose .pt{font-weight:650; margin-bottom:8px}
+  .intake-row{display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-top:1px solid var(--border)}
+  .intake-row .txt{flex:1 1 auto; min-width:0; word-break:break-word}
+  .alive-row{padding:10px 0; border-top:1px solid var(--border)}
+  .adv-row{display:flex; gap:12px; align-items:center; padding:10px 0; border-top:1px solid var(--border)}
+  .adv-days{min-width:58px; text-align:center; font-weight:800; font-size:18px; line-height:1}
+  .adv-days small{display:block; font-weight:500; font-size:11px; color:var(--muted)}
+  .more-tile{display:flex; align-items:center; gap:12px; padding:12px 0; border-top:1px solid var(--border); cursor:pointer}
+  .more-tile .ic{font-size:22px; width:30px; text-align:center}
+  .life-sub{color:var(--muted); font-size:14px; margin:0 0 14px}
   .tabbar{display:flex; gap:6px; overflow-x:auto; padding:10px 0 8px; scrollbar-width:none}
   .tabbar::-webkit-scrollbar{display:none}
   .tab{flex:0 0 auto; padding:8px 13px; border-radius:999px; background:var(--panel);
@@ -350,9 +376,11 @@
   <div class="row center" style="justify-content:space-between">
     <div class="brand">
       <span class="logo">✦</span>
-      <span>Selbstorga <small id="brandDate"></small></span>
+      <span><span id="brandMode">Leben</span> <small id="brandDate"></small></span>
     </div>
-    <div class="row" style="gap:2px">
+    <div class="row center" style="gap:2px">
+      <button class="btn sec sm" id="endWorkBtn" title="Arbeitsblock beenden und zurück ins Leben" style="display:none">✓ Arbeit beenden</button>
+      <button class="btn sm modebtn" id="modeBtn" title="Bereich wechseln">💼 Arbeit</button>
       <button class="btn ghost" id="undoBtn" title="Rückgängig" style="font-size:20px; padding:6px 8px">↶</button>
       <button class="btn ghost" id="redoBtn" title="Wiederherstellen" style="font-size:20px; padding:6px 8px">↷</button>
       <button class="btn ghost" id="syncBtn" title="Geräte-Sync" style="font-size:20px; padding:6px 10px">⟳</button>
@@ -625,6 +653,17 @@ function ensureState(){
   const defs={ mindAnswers:{}, mindDayQ:{}, mindDayR:{}, mindDayQuote:{}, mindAskedQ:[], mindAskedR:[],
     mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{},
     savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], relationship:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[], tabLabels:{}, dayGoalLog:{}, players:[], lessons:[], sprints:[],
+    /* Bereich Leben (Life OS) – neue Sammlungen, alle synchronisiert */
+    intake:[],        // Eingang: {id,text,ts,status:'open'|'filed'|'kept',target,targetId,updatedAt}
+    alive:[],         // Things That Make Me Feel Alive: {id,text,date,updatedAt}
+    adventures:[],    // Erlebnisse: {id,title,date|null,kind:'abenteuer'|'reise'|'misogi'|'solo'|'sport',done,notes,updatedAt}
+    builds:[],        // Build Projects: {id,title,phase:0..7,active,photo,updatedAt}
+    sortPairs:[],     // gelernte Einordnungen: {id,text,target,updatedAt}
+    weekly:{},        // 'YYYY-Www': {a:[5 Antworten], ts}
+    monthly:{},       // 'YYYY-MM': {a:[5 Antworten], ts}
+    lifeMorning:{},   // 'YYYY-MM-DD': Morgenantwort
+    compass:{leitbild:"", misogi:"", sportziel:"", year:null},
+    lifeStart:null,   // Startdatum des Bereichs Leben (steuert die 4 Einführungswochen)
     sync:{enabled:false, pass:"", apiBase:""} };
   // Tagesziel jetzt geräteübergreifend (aus altem lokalem S.ui übernehmen)
   if(S.ui){ if(S.dayGoal==null && S.ui.dayGoal!=null) S.dayGoal=S.ui.dayGoal; if(S.dayGoalManual==null && S.ui.dayGoalManual!=null) S.dayGoalManual=S.ui.dayGoalManual; }
@@ -634,6 +673,12 @@ function ensureState(){
   for(const k in defs){ if(S[k]==null) S[k]=defs[k]; }
   if(S._rev==null) S._rev=0;
   if(!S.startDate) S.startDate=todayStr();
+  if(!S.lifeStart) S.lifeStart=todayStr();
+  if(!S.compass||typeof S.compass!=="object") S.compass={leitbild:"", misogi:"", sportziel:"", year:null};
+  if(!S.ui) S.ui={active:"overview"};
+  if(!S.ui.mode) S.ui.mode="leben";
+  // Routine "Etwas nur für mich" für die Abendfrage (einmalig, ohne Anzeige auf der Arbeits-Übersicht)
+  if(!S.routines.some(r=>r.id==="r_fuermich")) S.routines.push({id:"r_fuermich", name:"Etwas nur für mich", icon:"🌿", updatedAt:Date.now()});
   if(S.mind && typeof S.mind==="object"){        // migrate legacy string answers
     for(const k in S.mind){
       if(/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof S.mind[k]==="string" && S.mind[k] && !S.mindAnswers[k])
@@ -876,33 +921,79 @@ function toggleTodo(id){
 function delTodo(id){ tombstone("todos",id); S.todos=S.todos.filter(x=>x.id!==id); save(); render(); }
 
 /* ============================ RENDER: TABS ============================ */
+/* Zwei Welten: Bereich ARBEIT (To-dos, Stundendoku) und Bereich LEBEN (Life OS). Nie beide auf einem Screen. */
 const SPECIALS_LEFT=[{k:"overview", icon:"🏠", name:"Übersicht"}];
 const SPECIALS_RIGHT=[
   {k:"goals",    icon:"🎯", name:"Ziele"},
-  {k:"routines", icon:"🔁", name:"Routinen"},
-  {k:"mind",     icon:"🧠", name:"Mind"},
-  {k:"guide",    icon:"🧭", name:"Leitfaden"},
-  {k:"ideas",    icon:"💡", name:"Ideen"},
-  {k:"thoughts", icon:"💭", name:"Gedanken"},
-  {k:"relationship", icon:"💞", name:"Beziehung"},
-  {k:"bookmarks",icon:"🔖", name:"Lesezeichen"},
-  {k:"wishes",   icon:"🌟", name:"Wünsche"},
-  {k:"hours",    icon:"🎾", name:"Stundendoku"},
   {k:"chat",     icon:"💬", name:"Chat"},
 ];
+/* Stundendoku: Tab entfernt (in eine andere App überführt); Daten in S.players/S.lessons bleiben erhalten. Erreichbar über ?open=stunden */
+/* Tableiste des Bereichs Leben – bewusst kurz. "Mehr" führt zu den älteren Tabs (Mind, Routinen, Leitfaden, Ideen, Gedanken, Beziehung, Lesezeichen). */
+const LIFE_TABS=[
+  {k:"today",      icon:"🌿", name:"Heute"},
+  {k:"intake",     icon:"✍️", name:"Eingang"},
+  {k:"wishes",     icon:"🌟", name:"100 Things"},
+  {k:"adventures", icon:"🧭", name:"Erlebnisse"},
+  {k:"alive",      icon:"✨", name:"Alive"},
+  {k:"more",       icon:"⋯",  name:"Mehr"},
+];
+const LIFE_LEGACY=[
+  {k:"mind",     icon:"🧠", name:"Mind", sub:"Zitat, Frage des Tages, eigene Gedanken"},
+  {k:"routines", icon:"🔁", name:"Routinen", sub:"Tages-Checks und Gefühls-Check"},
+  {k:"guide",    icon:"🧭", name:"Leitfaden", sub:"Leitbild und Kompass"},
+  {k:"ideas",    icon:"💡", name:"Ideen", sub:"geparkte Ideen nach Thema"},
+  {k:"bookmarks",icon:"🔖", name:"Lesezeichen", sub:"Links und Inspiration"},
+  {k:"thoughts", icon:"💭", name:"Gedanken", sub:"freie Notizen"},
+  {k:"relationship", icon:"💞", name:"Beziehung", sub:"Notizen mit Tags"},
+];
+const ALL_SPECIALS=()=>[...SPECIALS_LEFT,...SPECIALS_RIGHT,...LIFE_TABS,...LIFE_LEGACY];
+const LIFE_KEYS=new Set([...LIFE_TABS.map(t=>t.k), ...LIFE_LEGACY.map(t=>t.k), "weekly", "monthly"]);
 function tabName(key){
   const custom=(S.tabLabels||{})[key];
-  const sp=[...SPECIALS_LEFT,...SPECIALS_RIGHT].find(s=>s.k===key);
+  const sp=ALL_SPECIALS().find(s=>s.k===key);
   if(sp) return custom||sp.name;
   if(key.startsWith("area:")){ const a=areaById(key.slice(5)); if(a) return a.name; }
   return "";
 }
 function tabMeta(key){
   const custom=(S.tabLabels||{})[key];
-  const sp=[...SPECIALS_LEFT,...SPECIALS_RIGHT].find(s=>s.k===key);
+  const sp=ALL_SPECIALS().find(s=>s.k===key);
   if(sp) return {label:`${sp.icon} ${esc(custom||sp.name)}`, dot:null};
   if(key.startsWith("area:")){ const a=areaById(key.slice(5)); if(a) return {label:`${esc(a.icon||"")} ${esc(a.name)}`, dot:a.color}; }
   return null;
+}
+/* ---- Modus ---- */
+function isLifeKey(k){ return LIFE_KEYS.has(k); }
+function inLife(){ return S.ui.mode==="leben"; }
+function setMode(mode, activeKey){
+  if(mode===S.ui.mode && !activeKey){ return; }
+  // letzten Tab je Modus merken
+  if(S.ui.mode==="leben") S.ui.lastLife=S.ui.active; else S.ui.lastWork=S.ui.active;
+  S.ui.mode=mode;
+  if(activeKey) S.ui.active=activeKey;
+  else S.ui.active = mode==="leben" ? (S.ui.lastLife&&isLifeKey(S.ui.lastLife)?S.ui.lastLife:"today") : (S.ui.lastWork&&!isLifeKey(S.ui.lastWork)?S.ui.lastWork:"overview");
+  save(); render(); window.scrollTo(0,0);
+}
+async function enterWork(){
+  // Arbeitsblock mit klarer Grenze: einmal am Tag fragen, bis wann
+  const d=todayStr();
+  if(!(S.ui.workUntil && S.ui.workUntil.d===d)){
+    const r=await uiPrompt("Arbeitsblock starten",[{key:"until", label:"Bis wann heute? (z.B. 12:30 – darf leer bleiben)", value:S.ui.workUntilLast||"", placeholder:"12:30"}],"Los");
+    if(r===null) return;
+    S.ui.workUntil={d, until:(r.until||"").trim()}; if(r.until) S.ui.workUntilLast=r.until.trim();
+    S.ui.workEnded=null;
+  }
+  setMode("arbeit");
+}
+function endWork(){ S.ui.workEnded=todayStr(); setMode("leben","today"); toast("Arbeit beendet – zurück ins Leben 🌿"); }
+function renderModeUI(){
+  const life=inLife();
+  const b=$("#modeBtn"); if(b){ b.textContent = life ? "💼 Arbeit" : "🌿 Leben"; b.title = life ? "In den Bereich Arbeit wechseln" : "Zurück in den Bereich Leben"; }
+  const eb=$("#endWorkBtn"); if(eb) eb.style.display = life ? "none" : "";
+  const sw=$(".searchwrap"); if(sw) sw.style.display = life ? "none" : "";
+  const fab=$("#fab"); if(fab) fab.style.display = life ? "none" : "";
+  const br=$("#brandMode"); if(br) br.textContent = life ? "Leben" : "Arbeit";
+  document.body.classList.toggle("life", life);
 }
 function currentTabOrder(){
   const defaults=[...SPECIALS_LEFT.map(s=>s.k), ...S.areas.map(a=>"area:"+a.id), ...SPECIALS_RIGHT.map(s=>s.k)];
@@ -917,8 +1008,24 @@ function moveTab(key, dir){
   const j=dir==="left"?i-1:i+1; if(j<0||j>=order.length) return;
   [order[i],order[j]]=[order[j],order[i]]; save(); renderTabs();
 }
+function renderLifeTabs(bar){
+  const act=S.ui.active;
+  LIFE_TABS.forEach(t=>{
+    if(t.k==="adventures"&&!lifeUnlocked("adventures")) return;
+    if(t.k==="wishes"&&!lifeUnlocked("wishes")) return;
+    if(t.k==="more"&&!lifeUnlocked("more")) return;
+    const b=document.createElement("button");
+    const active = act===t.k || (t.k==="more" && LIFE_LEGACY.some(l=>l.k===act)) || (t.k==="today" && (act==="weekly"||act==="monthly"));
+    b.className="tab "+(active?"active":"");
+    b.innerHTML=`${t.icon} ${esc(tabName(t.k))}`;
+    b.onclick=()=>go(t.k);
+    bar.appendChild(b);
+  });
+}
 function renderTabs(){
+  renderModeUI();
   const bar=$("#tabbar"); const sl=bar.scrollLeft; bar.innerHTML="";
+  if(inLife()){ renderLifeTabs(bar); bar.scrollLeft=sl; return; }
   const order=currentTabOrder(); const edit=!!S.ui.editTabs;
   order.forEach((k,idx)=>{
     const meta=tabMeta(k); if(!meta) return;
@@ -940,7 +1047,12 @@ function renderTabs(){
   et.onclick=()=>{ S.ui.editTabs=!S.ui.editTabs; save(); renderTabs(); }; bar.appendChild(et);
   bar.scrollLeft=sl;
 }
-function go(k){ S.ui.active=k; save(); render(); window.scrollTo(0,0); }
+function go(k){
+  // Ein Tab gehört zu genau einem Bereich – beim Wechsel folgt der Modus dem Tab
+  const wantLife=isLifeKey(k);
+  if(wantLife!==inLife()){ if(S.ui.mode==="leben") S.ui.lastLife=S.ui.active; else S.ui.lastWork=S.ui.active; S.ui.mode=wantLife?"leben":"arbeit"; }
+  S.ui.active=k; save(); render(); window.scrollTo(0,0);
+}
 async function addArea(){
   const r=await uiPrompt("Neuer Bereich / Tab",[
     {key:"name",label:"Name",placeholder:"z.B. Finanzen"},
@@ -969,6 +1081,13 @@ async function renameTab(key){
 function render(){
   renderTabs();
   const k=S.ui.active;
+  if(k==="today")    return viewToday();
+  if(k==="intake")   return viewIntake();
+  if(k==="adventures") return viewAdventures();
+  if(k==="alive")    return viewAlive();
+  if(k==="more")     return viewMore();
+  if(k==="weekly")   return viewWeekly();
+  if(k==="monthly")  return viewMonthly();
   if(k==="overview") return viewOverview();
   if(k==="routines") return viewRoutines();
   if(k==="mind")     return viewMind();
@@ -2620,10 +2739,37 @@ function viewIdeas(){
   });
 }
 
-/* ============================ VIEW: WISHES (Lebenswünsche) ============================ */
+/* ============================ VIEW: 100 THINGS (Speicher bleibt S.wishes) ============================ */
+/* Die ersten vier Kategorien sind die alten – bestehende Einträge behalten sie und bleiben sichtbar. */
 const WISH_CATS=[
+  {k:"Reisen & Abenteuer", icon:"🌍"}, {k:"Challenges & Körper", icon:"🏔️"}, {k:"Erlebnisse & Spaß", icon:"🎉"},
+  {k:"Freiheit & Online", icon:"💻"}, {k:"Kreativität & Build", icon:"🔨"}, {k:"Komfortzone & Lernen", icon:"🧠"},
+  {k:"Kochen & Fähigkeiten", icon:"🍳"}, {k:"Beziehungen & Momente", icon:"❤️"}, {k:"Zuhause & Natur", icon:"🌿"},
   {k:"Reise", icon:"🌍"}, {k:"Challenge", icon:"🔥"}, {k:"Erlebnis", icon:"✨"}, {k:"Sonstiges", icon:"📝"}
 ];
+/* Startliste v1.1 – wird nur ergänzt, was noch nicht da ist (Abgleich über den Titel). */
+const THINGS_SEED=[
+  ["Reisen & Abenteuer","Eine Woche alleine nach Barcelona"],["Reisen & Abenteuer","Eine Woche alleine nach Portugal"],["Reisen & Abenteuer","Eine Woche alleine an einem Strand in Italien"],
+  ["Reisen & Abenteuer","Eine Überraschungsreise machen"],["Reisen & Abenteuer","Ein Wochenende bis eine Woche in einer Waldhütte"],["Reisen & Abenteuer","Eine Nacht alleine außerhalb der eigenen Wohnung verbringen"],
+  ["Reisen & Abenteuer","Einen Sonnenaufgang auf einem Berg erleben"],["Reisen & Abenteuer","Eine Nacht unter freiem Himmel schlafen"],["Reisen & Abenteuer","Einen Monat in einer anderen Stadt leben"],
+  ["Challenges & Körper","Einen Triathlon absolvieren"],["Challenges & Körper","Einen Halbmarathon laufen"],["Challenges & Körper","15 Klimmzüge am Stück"],["Challenges & Körper","Snowboard fahren"],["Challenges & Körper","Surfen lernen"],["Challenges & Körper","Eine 100-km-Radtour machen"],
+  ["Erlebnisse & Spaß","Männerausflug an Pfingsten 2027 zum Eishockey"],["Erlebnisse & Spaß","Ein Festival besuchen (2027)"],["Erlebnisse & Spaß","Paintball spielen"],["Erlebnisse & Spaß","Lasertag spielen"],["Erlebnisse & Spaß","Pickleball spielen"],
+  ["Erlebnisse & Spaß","Einen Freizeitpark besuchen"],["Erlebnisse & Spaß","Eine private Dinnerparty organisieren"],["Erlebnisse & Spaß","Filmabend mit Beamer im Freien"],["Erlebnisse & Spaß","Casino-Abend, elegant gekleidet (festes Spaßbudget)"],
+  ["Erlebnisse & Spaß","Eine eigene Schnitzeljagd organisieren"],["Erlebnisse & Spaß","Ein Erlebnis, das ich normalerweise für zu verrückt halte"],
+  ["Freiheit & Online","100 € online verdienen"],["Freiheit & Online","5.000 € online verdienen"],["Freiheit & Online","2.000 € pro Monat online verdienen"],["Freiheit & Online","Ein eigenes Online-Produkt veröffentlichen"],["Freiheit & Online","Ein digitales Produkt verkaufen"],
+  ["Kreativität & Build","Ein Modern-Art-Bild zeichnen"],["Kreativität & Build","Kunstwerk: Tennisball aus mehreren Metern auf eine Leinwand fallen lassen"],["Kreativität & Build","Einen Cap-Halter bauen"],["Kreativität & Build","Couchtisch mit integriertem Spielbrett bauen"],["Kreativität & Build","Ein eigenes kleines Videoprojekt produzieren"],
+  ["Komfortzone & Lernen","Einen halben Tag ohne Smartphone"],["Komfortzone & Lernen","Einen ganzen Tag ohne Smartphone"],["Komfortzone & Lernen","Einen fremden Menschen ansprechen und ein Kompliment machen"],["Komfortzone & Lernen","Ein Buch über ein Thema lesen, das nichts mit meinem Leben zu tun hat"],
+  ["Komfortzone & Lernen","Einen Fremden nach einer persönlichen Empfehlung fragen"],["Komfortzone & Lernen","Alleine auf eine Veranstaltung gehen"],["Komfortzone & Lernen","Jemanden spontan auf einen Kaffee einladen"],["Komfortzone & Lernen","Eine Woche lang jeden Tag ein Foto machen"],
+  ["Komfortzone & Lernen","Ein Wochenende lang etwas völlig Neues lernen"],["Komfortzone & Lernen","Einen Monat lang täglich 30 Minuten lesen"],
+  ["Kochen & Fähigkeiten","Schweinebraten selbst kochen"],["Kochen & Fähigkeiten","Sushi selbst machen"],["Kochen & Fähigkeiten","Eigenes Bier brauen"],["Kochen & Fähigkeiten","Eigenen Wein herstellen"],["Kochen & Fähigkeiten","Einen Kochkurs besuchen"],["Kochen & Fähigkeiten","Eine neue Sprache 30 Tage lang lernen"],["Kochen & Fähigkeiten","Einen Barista-Kurs besuchen"],
+  ["Beziehungen & Momente","Jemanden ohne besonderen Anlass beschenken"],["Beziehungen & Momente","Ein Tag im Bett: Frühstück im Bett, Serien, Kuscheln"],["Beziehungen & Momente","Einen Monat Auszeit nehmen"],
+  ["Zuhause & Natur","Den Kleiderschrank komplett ausmisten"],["Zuhause & Natur","Ein neues Parfüm aussuchen"],["Zuhause & Natur","Einen Baum pflanzen"],
+];
+function importThingsSeed(){
+  const have=new Set(S.wishes.map(w=>(w.title||"").toLowerCase().replace(/\s+/g," ").trim()));
+  let n=0; THINGS_SEED.forEach(([cat,title],i)=>{ const key=title.toLowerCase().replace(/\s+/g," ").trim(); if(have.has(key)) return; S.wishes.push({id:"w100_"+String(i+1).padStart(2,"0"), title, cat, notes:"", done:false, ts:todayStr(), updatedAt:Date.now()}); have.add(key); n++; });
+  return n;
+}
 const WISH_POOL=[
   {c:"Reise", t:"Nordlichter in Norwegen sehen"},
   {c:"Reise", t:"Roadtrip an der Westküste der USA"},
@@ -2655,12 +2801,12 @@ function viewWishes(){
   let list=S.wishes;
   if(cat!=="alle") list=list.filter(w=>w.cat===cat);
 
-  let html=`<div class="view-title">Lebenswünsche</div>
-    <div class="view-sub">Reiseziele, verrückte Challenges, Dinge, die du erleben willst.</div>
+  let html=`<div class="view-title">100 Things</div>
+    <div class="life-sub">Keine Pflichtliste. Eine Sammlung von Möglichkeiten, die dein Leben interessanter machen könnten.</div>
 
     <div class="card">
-      <h3>Neuer Lebenswunsch</h3>
-      <div class="field"><input id="wTitle" placeholder="Was willst du erleben?"></div>
+      <h3>Dazu</h3>
+      <div class="field"><input id="wTitle" placeholder="Was willst du erleben, lernen, bauen?" autocomplete="off"></div>
       <div class="field"><label>Kategorie</label>
         <select id="wCat">${WISH_CATS.map(c=>`<option value="${c.k}">${c.icon} ${c.k}</option>`).join("")}</select></div>
       <div class="row">
@@ -2675,16 +2821,22 @@ function viewWishes(){
       ${WISH_CATS.map(c=>`<button class="catchip ${cat===c.k?"on":""}" data-cat="${c.k}">${c.icon} ${c.k}</button>`).join("")}
     </div>`;
 
-  if(!list.length){ html+=`<div class="empty">Noch keine Wünsche in dieser Kategorie. Lass dir was vorschlagen 💡</div>`; }
-  list.forEach(w=>{
-    const c=WISH_CATS.find(x=>x.k===w.cat)||{icon:"📝"};
-    html+=`<div class="card ${w.done?"":""}" data-wish="${w.id}">
-      <div class="row center" style="gap:10px">
-        <button class="check ${w.done?"on":""}" data-wact="toggle">${w.done?"✓":""}</button>
-        <div class="grow"><b style="${w.done?"text-decoration:line-through;opacity:.6":""}">${c.icon} ${esc(w.title)}</b>
-          ${w.notes?`<div class="small muted">${esc(w.notes)}</div>`:""}</div>
-        <button class="btn ghost sm" data-wact="del">✕</button>
-      </div></div>`;
+  if(!list.length){ html+=`<div class="empty">Noch nichts in dieser Kategorie. Lass dir was vorschlagen 💡</div>`; }
+  // Gruppiert nach Kategorie, erledigte grün, keine Zähler, keine Prozent
+  const cats=[...new Set(list.map(w=>w.cat||"Sonstiges"))].sort((a,b)=>WISH_CATS.findIndex(x=>x.k===a)-WISH_CATS.findIndex(x=>x.k===b));
+  cats.forEach(ck=>{
+    const c=WISH_CATS.find(x=>x.k===ck)||{icon:"📝", k:ck};
+    if(cat==="alle") html+=`<div class="proj-head">${c.icon} ${esc(ck)}</div>`;
+    list.filter(w=>(w.cat||"Sonstiges")===ck).forEach(w=>{
+      html+=`<div class="card" data-wish="${w.id}" style="padding:10px 12px; ${w.done?"border-color:var(--good)":""}">
+        <div class="row center" style="gap:10px">
+          <button class="check ${w.done?"on":""}" data-wact="toggle" title="Erlebt">${w.done?"✓":""}</button>
+          <div class="grow" style="min-width:0"><span style="${w.done?"color:var(--good)":""}">${esc(w.title)}</span>
+            ${w.notes?`<div class="small muted">${esc(w.notes)}</div>`:""}</div>
+          ${w.done?"":`<button class="btn ghost sm" data-wact="date" title="Termin machen – wandert in die Erlebnisse">📅</button>`}
+          <button class="btn ghost sm" data-wact="del" title="Entfernen">✕</button>
+        </div></div>`;
+    });
   });
 
   const v=$("#view"); v.innerHTML=html;
@@ -2699,8 +2851,9 @@ function viewWishes(){
     const id=card.dataset.wish;
     card.querySelectorAll("[data-wact]").forEach(b=>b.onclick=()=>{
       const w=S.wishes.find(x=>x.id===id);
-      if(b.dataset.wact==="toggle"){ w.done=!w.done; w.updatedAt=Date.now(); save(); render(); if(w.done) toast("Erlebt! 🎉"); }
-      if(b.dataset.wact==="del"){ uiConfirm("Diesen Wunsch löschen?","Löschen").then(ok=>{ if(ok){ tombstone("wishes",id); S.wishes=S.wishes.filter(x=>x.id!==id); save(); render(); } }); }
+      if(b.dataset.wact==="toggle"){ w.done=!w.done; w.doneAt=w.done?todayStr():null; w.updatedAt=Date.now(); save(); render(); if(w.done) toast("Erlebt! 🎉 Magst du es unter Lebendig festhalten?"); }
+      if(b.dataset.wact==="date"){ uiPrompt("Termin machen",[{key:"date",label:"Wann? (JJJJ-MM-TT, darf leer bleiben = Idee ohne Datum)",value:"",placeholder:"2027-03-14"}],"Eintragen").then(r=>{ if(!r) return; const d=/^\d{4}-\d{2}-\d{2}$/.test(r.date||"")?r.date:null; const kind=/reise|woche|monat|barcelona|portugal|italien|stadt/i.test(w.title)?"reise":"abenteuer"; addAdventure(w.title, d, kind, "aus 100 Things"); toast(d?"Steht jetzt in den Erlebnissen 🧭":"Als Idee in den Erlebnissen 🧭"); }); }
+      if(b.dataset.wact==="del"){ uiConfirm("Diesen Eintrag entfernen?","Entfernen").then(ok=>{ if(ok){ tombstone("wishes",id); S.wishes=S.wishes.filter(x=>x.id!==id); save(); render(); } }); }
     });
   });
 }
@@ -2722,6 +2875,441 @@ function suggestWish(){
     </div></div>`;
   $("#sgYes").onclick=()=>{ S.wishes.unshift({id:uid(), title:pick.t, cat:pick.c, notes:"", done:false, ts:todayStr(), updatedAt:Date.now()}); save(); render(); toast("Zu deinen Lebenswünschen hinzugefügt ⭐"); };
   $("#sgNo").onclick=()=>suggestWish();
+}
+
+/* ============================ BEREICH LEBEN (Life OS) ============================ */
+/* Grundregeln: keine Streaks, nichts rot, nichts überfällig, eine Frage – eine Antwort, Inspiration statt Kontrolle. */
+const BUILD_PHASES=["Inspiration","Das will ich","Design","Material","Build Weekend","Finish","Foto","Archiv"];
+function lifeWeek(){ const a=new Date(S.lifeStart+"T00:00:00"), b=new Date(todayStr()+"T00:00:00"); return Math.floor(Math.max(0,Math.round((b-a)/86400000))/7)+1; }
+/* Vier Einführungswochen: Module kommen nach und nach dazu. "Einführung überspringen" schaltet alles frei. */
+function lifeUnlocked(feature){
+  if(S.ui.lifeSkipIntro) return true;
+  const need={weekly:2, adventures:2, builds:3, wishes:3, monthly:4, more:4}[feature]||1;
+  return lifeWeek()>=need;
+}
+function isoWeekKey(iso){ const d=new Date(iso+"T00:00:00"); const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())); const day=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-day); const y=t.getUTCFullYear(); const w=Math.ceil((((t-Date.UTC(y,0,1))/86400000)+1)/7); return y+"-W"+String(w).padStart(2,"0"); }
+function monthKey(iso){ return iso.slice(0,7); }
+function isFirstSunday(iso){ const d=new Date(iso+"T00:00:00"); return d.getDay()===0 && d.getDate()<=7; }
+function lastLifeDate(){
+  let m="";
+  (S.alive||[]).forEach(a=>{ if(a.date>m) m=a.date; });
+  (S.intake||[]).forEach(i=>{ const d=isoLocal(new Date(i.ts||0)); if(d>m) m=d; });
+  Object.keys(S.mindAnswers||{}).forEach(d=>{ if(S.mindAnswers[d]&&S.mindAnswers[d].a&&d>m) m=d; });
+  Object.keys(S.lifeMorning||{}).forEach(d=>{ if(S.lifeMorning[d]&&d>m) m=d; });
+  Object.values(S.weekly||{}).concat(Object.values(S.monthly||{})).forEach(w=>{ const d=isoLocal(new Date(w.ts||0)); if(d>m) m=d; });
+  return m||null;
+}
+function daysSinceLife(){ let d=lastLifeDate(); if(!d||(S.lifeStart&&S.lifeStart>d)) d=S.lifeStart; if(!d) return null; return -daysUntil(d); }
+function nextAdventure(){ const t=todayStr(); return (S.adventures||[]).filter(a=>!a.done&&a.date&&a.date>=t).sort((a,b)=>a.date.localeCompare(b.date))[0]||null; }
+function activeBuild(){ return (S.builds||[]).find(b=>b.active&&(b.phase||0)<7)||null; }
+function routineMark(rid, on){ const today=todayStr(); const log=S.routineLog[today]||(S.routineLog[today]={done:{},focus:null}); if(!log.done) log.done={}; if(on) log.done[rid]=true; else delete log.done[rid]; }
+function routineIs(rid){ const log=S.routineLog[todayStr()]; return !!(log&&log.done&&log.done[rid]===true); }
+const EVE_TRI=[{rid:"r_workout",label:"🏃 bewegt"},{rid:"r_freund",label:"👥 Mensch gesehen"},{rid:"r_fuermich",label:"🌿 etwas für mich"}];
+function triHTML(){ return `<div class="tri">${EVE_TRI.map(t=>`<button data-tri="${t.rid}" class="${routineIs(t.rid)?"on":""}">${t.label}</button>`).join("")}</div>`; }
+function bindTri(root){ root.querySelectorAll("[data-tri]").forEach(b=>b.onclick=()=>{ const rid=b.dataset.tri; routineMark(rid, !routineIs(rid)); save(); b.classList.toggle("on"); }); }
+function fmtLong(iso){ const d=new Date(iso+"T00:00:00"); return WDS[d.getDay()]+", "+d.getDate()+". "+d.toLocaleDateString("de-DE",{month:"long"}); }
+
+/* ---- Startseite "Heute" ---- */
+function viewToday(){
+  const today=todayStr(), hour=new Date().getHours(), dow=new Date().getDay();
+  const evening = !!S.ui.forceEvening || (hour>=20 && !S.ui.forceMorning);
+  const wasForced = !!S.ui.forceEvening || !!S.ui.forceMorning;
+  const gap=daysSinceLife();
+  const returning = gap!==null && gap>7 && S.ui.welcomedBack!==today;
+  const week=lifeWeek();
+  let html=`<div class="view-title">${WD[dow]}</div>
+    <div class="life-sub">${new Date().toLocaleDateString("de-DE",{day:"numeric",month:"long"})} · ${esc(mindReminder(today))}</div>`;
+  const wu=S.ui.workUntil;
+  if(wu && wu.d===today && S.ui.workEnded!==today) html+=`<div class="tiny muted" style="margin:-8px 0 12px">Arbeitsblock heute${wu.until?" bis "+esc(wu.until):""} · <a class="link" href="#" id="toWork">zur Arbeit</a></div>`;
+
+  if(returning){
+    html+=`<div class="life-card" style="border-color:var(--accent)">
+      <div class="life-q">Schön, dass du wieder da bist.</div>
+      <div class="muted" style="margin-bottom:10px">Du musst nichts nachholen. Was würde dir gerade guttun?</div>
+      <textarea id="backA" placeholder="Ein Satz reicht …"></textarea>
+      <div class="row" style="gap:8px; margin-top:8px"><button class="btn grow" id="backSave">Weiter</button><button class="btn sec" id="backSkip">Später</button></div>
+    </div>`;
+  } else if(evening){
+    const cur=S.mindAnswers[today]||{}; const done=!!cur.a && !S.ui.editEvening;
+    html+=`<div class="life-card">
+      <h3>Abend</h3>
+      <div class="life-q">Was war heute schön?</div>
+      ${done?`<div style="white-space:pre-wrap">${esc(cur.a)}</div><div class="row center" style="justify-content:space-between; margin-top:8px"><span class="tiny muted">festgehalten ✓</span><button class="link" id="eveEdit">ändern</button></div>`
+           :`<textarea id="eveA" placeholder="… und was hat mir Energie gegeben? Worauf freue ich mich morgen?" style="min-height:80px">${esc(cur.a||"")}</textarea>
+             <button class="btn" id="eveSave" style="width:100%; margin-top:8px">Festhalten</button>`}
+      ${triHTML()}
+    </div>`;
+  } else {
+    const cur=S.lifeMorning[today]||""; const done=!!cur && !S.ui.editMorning;
+    html+=`<div class="life-card">
+      <h3>Morgen</h3>
+      <div class="life-q">Was wäre heute ein schöner Tag für mich?</div>
+      ${done?`<div style="white-space:pre-wrap">${esc(cur)}</div><div class="row center" style="justify-content:space-between; margin-top:8px"><span class="tiny muted">notiert ✓</span><button class="link" id="morEdit">ändern</button></div>`
+           :`<textarea id="morA" placeholder="Ein Satz reicht. Du musst nichts erledigen." style="min-height:64px">${esc(cur)}</textarea>
+             <button class="btn" id="morSave" style="width:100%; margin-top:8px">Notieren</button>`}
+    </div>`;
+  }
+
+  // Nächstes Erlebnis
+  if(lifeUnlocked("adventures")){
+    const nx=nextAdventure();
+    if(nx){ const du=daysUntil(nx.date);
+      html+=`<div class="life-card" data-go="adventures" style="cursor:pointer"><h3>Nächstes Erlebnis</h3>
+        <div class="row center" style="gap:14px"><div><div class="countdown">${du===0?"heute":du}</div><div class="tiny muted">${du===0?"":(du===1?"Tag":"Tage")}</div></div>
+        <div class="grow"><b>${esc(nx.title)}</b><div class="muted small">${fmtLong(nx.date)}</div></div></div></div>`;
+    } else {
+      html+=`<div class="life-card"><h3>Vorfreude</h3><div class="life-q" style="font-size:17px">Worauf freust du dich in den nächsten 8 Wochen?</div>
+        <button class="btn sec" id="advAdd" style="width:100%">Erlebnis eintragen</button></div>`;
+    }
+  }
+  // Aktuelles Build Project
+  if(lifeUnlocked("builds")){
+    const b=activeBuild();
+    if(b){ html+=`<div class="life-card"><h3>Build Project</h3><div class="row center" style="gap:10px"><div class="grow"><b>🔨 ${esc(b.title)}</b><div class="muted small">Phase ${(b.phase||0)+1}/8 · ${BUILD_PHASES[b.phase||0]}</div></div><button class="btn sec sm" id="buildNext">Phase weiter ›</button></div></div>`; }
+    else { html+=`<div class="life-card"><h3>Build Project</h3><div class="muted small" style="margin-bottom:8px">Was möchtest du als Nächstes mit deinen Händen bauen?</div><div class="row"><input id="buildNew" class="grow" placeholder="z.B. Cap-Halter" autocomplete="off"><button class="btn" id="buildAdd">＋</button></div></div>`; }
+  }
+  // Alive
+  const aliveToday=(S.alive||[]).filter(a=>a.date===today);
+  html+=`<div class="life-card"><h3>Lebendig</h3>
+    ${aliveToday.length?aliveToday.map(a=>`<div class="alive-row">✨ ${esc(a.text)}</div>`).join(""):""}
+    ${S.ui.aliveOpen===today?`<textarea id="aliveA" placeholder="Was hat sich heute gut angefühlt? Wovon willst du mehr?" style="min-height:64px"></textarea><button class="btn" id="aliveSave" style="width:100%; margin-top:8px">Festhalten</button>`
+      :`<div class="muted small" style="margin-bottom:8px">${aliveToday.length?"Noch etwas?":"Heute schon etwas Schönes erlebt?"}</div><div class="yesno"><button id="aliveYes">Ja</button><button id="aliveNo">${aliveToday.length?"Nein, reicht":"Nein"}</button></div>`}
+  </div>`;
+  // Sonntag: Wochenreflexion, erster Sonntag: Monatsplanung
+  if(dow===0 && lifeUnlocked("weekly")){
+    const wk=isoWeekKey(today); const doneW=!!(S.weekly[wk]&&S.weekly[wk].ts);
+    html+=`<div class="life-card" style="border-color:var(--accent)"><h3>Sonntag</h3><div class="life-q" style="font-size:17px">10 Minuten für dein Leben</div>
+      <button class="btn ${doneW?"sec":""}" data-go="weekly" style="width:100%">${doneW?"Wochenrückblick ansehen":"Was hat diese Woche gutgetan?"}</button>
+      ${isFirstSunday(today)&&lifeUnlocked("monthly")?`<button class="btn sec" data-go="monthly" style="width:100%; margin-top:8px">${S.monthly[monthKey(today)]?"Monatsplanung ansehen":"Was möchtest du diesen Monat erleben?"}</button>`:""}
+    </div>`;
+  }
+  // Erinnerungen (Web Push)
+  if(!S.ui.pushOn && !S.ui.pushDismissed && pushSupported()){
+    html+=`<div class="life-card"><h3>Erinnerungen</h3><div class="muted small" style="margin-bottom:8px">Drei Anstöße pro Woche, mehr nicht: abends 21:00 "Was war heute schön?", sonntags 18:00 der Wochenrückblick, einmal im Monat die 100 Things.</div>
+      <div class="row" style="gap:8px"><button class="btn grow" id="pushOn">Erinnerungen aktivieren</button><button class="btn sec" id="pushLater">Später</button></div>
+      ${isIOS()&&!isStandalone()?`<div class="tiny muted" style="margin-top:8px">Am iPhone funktioniert das nur, wenn die App über "Zum Home-Bildschirm" installiert ist und von dort geöffnet wird.</div>`:""}</div>`;
+  }
+  if(!S.ui.lifeSkipIntro && week<4){
+    html+=`<div class="tiny muted" style="text-align:center; margin-top:10px">Einführungswoche ${week} von 4 – nach und nach kommt mehr dazu. <a class="link" href="#" id="skipIntro">Alles jetzt freischalten</a></div>`;
+  }
+
+  const v=$("#view"); v.innerHTML=html;
+  if(wasForced){ S.ui.forceEvening=false; S.ui.forceMorning=false; save(); }
+  v.querySelectorAll("[data-go]").forEach(el=>el.onclick=(e)=>{ if(e.target.closest("button")&&el.tagName!=="BUTTON") return; go(el.dataset.go); });
+  const tw=$("#toWork"); if(tw) tw.onclick=(e)=>{ e.preventDefault(); setMode("arbeit"); };
+  const bs=$("#backSave"); if(bs) bs.onclick=()=>{ const a=$("#backA").value.trim(); if(a){ S.mindAnswers[today]={q:"Was würde dir gerade guttun?", a}; } S.ui.welcomedBack=today; save(); render(); };
+  const bk=$("#backSkip"); if(bk) bk.onclick=()=>{ S.ui.welcomedBack=today; save(); render(); };
+  const es=$("#eveSave"); if(es) es.onclick=()=>{ const a=$("#eveA").value.trim(); if(!a){ toast("Ein Satz reicht 🙂"); return; } S.mindAnswers[today]={q:"Was war heute schön?", a}; S.ui.editEvening=false; save(); toast("Festgehalten 🌙"); render(); };
+  const ee=$("#eveEdit"); if(ee) ee.onclick=()=>{ S.ui.editEvening=true; render(); };
+  const ms=$("#morSave"); if(ms) ms.onclick=()=>{ const a=$("#morA").value.trim(); if(!a) return; S.lifeMorning[today]=a; S.ui.editMorning=false; save(); toast("Notiert ☀️"); render(); };
+  const me=$("#morEdit"); if(me) me.onclick=()=>{ S.ui.editMorning=true; render(); };
+  bindTri(v);
+  const aa=$("#advAdd"); if(aa) aa.onclick=()=>go("adventures");
+  const bn=$("#buildNext"); if(bn) bn.onclick=()=>{ const b=activeBuild(); if(!b) return; b.phase=Math.min(7,(b.phase||0)+1); b.updatedAt=Date.now(); if(b.phase>=7){ b.active=false; b.doneAt=today; toast("Build #"+((S.builds||[]).filter(x=>x.doneAt).length)+" fertig 🎉"); } save(); render(); };
+  const ba=$("#buildAdd"); if(ba) ba.onclick=()=>{ const t=$("#buildNew").value.trim(); if(!t) return; (S.builds=S.builds||[]).unshift({id:uid(), title:t, phase:0, active:true, ts:today, updatedAt:Date.now()}); save(); render(); };
+  const ay=$("#aliveYes"); if(ay) ay.onclick=()=>{ S.ui.aliveOpen=today; render(); setTimeout(()=>{ const t=$("#aliveA"); if(t) t.focus(); },50); };
+  const an=$("#aliveNo"); if(an) an.onclick=()=>{ toast("Alles gut. Morgen ist ein neuer Tag."); };
+  const as=$("#aliveSave"); if(as) as.onclick=()=>{ const t=$("#aliveA").value.trim(); if(!t) return; (S.alive=S.alive||[]).unshift({id:uid(), text:t, date:today, updatedAt:Date.now()}); S.ui.aliveOpen=null; save(); toast("Festgehalten ✨"); render(); };
+  const po=$("#pushOn"); if(po) po.onclick=pushSubscribe;
+  const pl=$("#pushLater"); if(pl) pl.onclick=()=>{ S.ui.pushDismissed=true; save(); render(); };
+  const si=$("#skipIntro"); if(si) si.onclick=(e)=>{ e.preventDefault(); S.ui.lifeSkipIntro=true; save(); render(); };
+}
+
+/* ---- Wochenreflexion (Sonntag, 10 Minuten) ---- */
+const WEEKLY_Q=["Was habe ich diese Woche für mich gemacht?","Was habe ich erlebt oder ausprobiert?","Habe ich Menschen gesehen, die mir wichtig sind?","Was möchte ich nächste Woche erleben?","Was kann ich bewusst weglassen?"];
+function weekDays(iso){ const d=new Date(iso+"T00:00:00"); const wd=(d.getDay()+6)%7; d.setDate(d.getDate()-wd); return Array.from({length:7},(_,i)=>{ const x=new Date(d); x.setDate(d.getDate()+i); return isoLocal(x); }); }
+function viewWeekly(){
+  const today=todayStr(), wk=isoWeekKey(today); const cur=S.weekly[wk]||{a:[]};
+  const days=weekDays(today);
+  const moments=[];
+  days.forEach(d=>{ (S.alive||[]).filter(a=>a.date===d).forEach(a=>moments.push({d, t:"✨ "+a.text})); const m=S.mindAnswers[d]; if(m&&m.a) moments.push({d, t:"🌙 "+m.a}); });
+  const extraQ=mindQuestion(today);
+  let html=`<div class="view-title">Diese Woche</div><div class="life-sub">${fmtDate(days[0])} bis ${fmtDate(days[6])} · 10 Minuten, keine Pflicht</div>`;
+  if(moments.length) html+=`<div class="life-card"><h3>Was war</h3>${moments.map(m=>`<div class="alive-row"><span class="tiny muted">${fmtDate(m.d)}</span><div>${esc(m.t)}</div></div>`).join("")}</div>`;
+  html+=`<div class="life-card">${WEEKLY_Q.map((q,i)=>`<div class="field"><label style="font-size:14px; color:var(--text); margin-bottom:6px">${esc(q)}</label><textarea data-wq="${i}" style="min-height:52px">${esc(cur.a[i]||"")}</textarea></div>`).join("")}
+    <div class="field"><label style="font-size:14px; color:var(--text); margin-bottom:6px">Sonntagsfrage: ${esc(extraQ)}</label><textarea data-wq="5" style="min-height:52px">${esc(cur.a[5]||"")}</textarea></div>
+    <button class="btn" id="wkSave" style="width:100%">Fertig für diese Woche</button></div>`;
+  const past=Object.keys(S.weekly).filter(k=>k!==wk && S.weekly[k].ts).sort().reverse().slice(0,4);
+  if(past.length) html+=`<div class="proj-head">Frühere Wochen</div>`+past.map(k=>`<div class="card"><div class="tiny muted">${esc(k)}</div>${(S.weekly[k].a||[]).map((a,i)=>a?`<div class="small" style="margin-top:4px"><span class="muted">${esc((WEEKLY_Q[i]||"Sonntagsfrage").split("?")[0])}?</span> ${esc(a)}</div>`:"").join("")}</div>`).join("");
+  const v=$("#view"); v.innerHTML=html;
+  $("#wkSave").onclick=()=>{ const a=[]; v.querySelectorAll("[data-wq]").forEach(t=>a[+t.dataset.wq]=t.value.trim()); S.weekly[wk]={a, ts:Date.now()}; if(a[5]) S.mindAnswers[today]=S.mindAnswers[today]||{q:extraQ, a:a[5]}; save(); toast("Woche abgeschlossen 🌿"); go("today"); };
+}
+/* ---- Monatsplanung (erster Sonntag, 20 Minuten) ---- */
+const MONTHLY_Q=["Was möchte ich diesen Monat bauen?","Welches kleine Abenteuer plane ich?","Was möchte ich lernen oder ausprobieren?","Wann sehe ich Freunde und Familie? (2 bis 4 Termine)","Was würde mir diesen Monat besonders guttun?"];
+function viewMonthly(){
+  const today=todayStr(), mk=monthKey(today); const cur=S.monthly[mk]||{a:[]};
+  const name=new Date().toLocaleDateString("de-DE",{month:"long", year:"numeric"});
+  const aliveCount=(S.alive||[]).filter(a=>a.date.slice(0,7)===mk).length;
+  let html=`<div class="view-title">${esc(name)}</div><div class="life-sub">20 Minuten Gestaltung. Erlebnisse danach mit Datum eintragen, sonst passieren sie nicht.</div>`;
+  const ideas=(S.adventures||[]).filter(a=>!a.done&&!a.date);
+  if(ideas.length) html+=`<div class="life-card"><h3>Ideen, die warten</h3>${ideas.slice(0,8).map(a=>`<div class="alive-row">${a.kind==="misogi"?"🏔️":a.kind==="reise"?"✈️":"🧭"} ${esc(a.title)}</div>`).join("")}<button class="btn sec sm" data-go="adventures" style="margin-top:8px">Eine davon terminieren</button></div>`;
+  html+=`<div class="life-card">${MONTHLY_Q.map((q,i)=>`<div class="field"><label style="font-size:14px; color:var(--text); margin-bottom:6px">${esc(q)}</label><textarea data-mq="${i}" style="min-height:52px">${esc(cur.a[i]||"")}</textarea></div>`).join("")}
+    <button class="btn" id="moSave" style="width:100%">Monat ist geplant</button></div>
+    <div class="life-card"><h3>Inspiration</h3><div class="muted small" style="margin-bottom:8px">10 Minuten durch die 100 Things stöbern: Was fehlt? Was reizt dich gerade?${aliveCount?` Diesen Monat ${aliveCount} lebendige Momente festgehalten.`:""}</div><button class="btn sec" data-go="wishes" style="width:100%">100 Things öffnen</button></div>`;
+  const v=$("#view"); v.innerHTML=html;
+  v.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>go(b.dataset.go));
+  $("#moSave").onclick=()=>{ const a=[]; v.querySelectorAll("[data-mq]").forEach(t=>a[+t.dataset.mq]=t.value.trim()); S.monthly[mk]={a, ts:Date.now()}; save(); toast("Monat geplant 🧭"); go("adventures"); };
+}
+
+/* ---- Erlebnisse / Adventure Calendar + Jahreskompass ---- */
+const ADV_KINDS=[{k:"abenteuer",icon:"🧭",label:"Mini-Abenteuer"},{k:"reise",icon:"✈️",label:"Reise"},{k:"solo",icon:"🎒",label:"Solo-Woche"},{k:"misogi",icon:"🏔️",label:"Misogi"},{k:"sport",icon:"🏃",label:"Sportziel"},{k:"treffen",icon:"👥",label:"Freunde & Familie"}];
+function advIcon(k){ const x=ADV_KINDS.find(a=>a.k===k); return x?x.icon:"🧭"; }
+function viewAdventures(){
+  const today=todayStr(); const year=new Date().getFullYear();
+  const all=S.adventures||[];
+  const upcoming=all.filter(a=>!a.done&&a.date&&a.date>=today).sort((a,b)=>a.date.localeCompare(b.date));
+  const ideas=all.filter(a=>!a.done&&!a.date);
+  const past=all.filter(a=>a.done||(a.date&&a.date<today)).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const c=S.compass||{};
+  let html=`<div class="view-title">Erlebnisse</div><div class="life-sub">Immer etwas im Kalender, auf das du dich freust.</div>
+    <div class="life-card"><h3>Kompass ${year+1}</h3>
+      <div class="grid2">
+        <div class="field"><label>Misogi (einmal im Jahr, größer als gewohnt)</label><input id="cpMisogi" value="${esc(c.misogi||"")}" placeholder="z.B. Alpenüberquerung"></div>
+        <div class="field"><label>Körperliches Jahresziel</label><input id="cpSport" value="${esc(c.sportziel||"")}" placeholder="z.B. erster Triathlon"></div>
+      </div>
+      <div class="tiny muted">Misogi-Ideen sammelst du unten; hier steht nur das eine, für das du dich entschieden hast.</div>
+    </div>
+    <div class="life-card"><h3>Eintragen</h3>
+      <div class="field"><input id="advTitle" placeholder="Was? z.B. Wochenende Waldhütte" autocomplete="off"></div>
+      <div class="grid2">
+        <div class="field"><label>Wann (darf leer bleiben)</label><input type="date" id="advDate"></div>
+        <div class="field"><label>Art</label><select id="advKind">${ADV_KINDS.map(k=>`<option value="${k.k}">${k.icon} ${k.label}</option>`).join("")}</select></div>
+      </div>
+      <button class="btn" id="advSave" style="width:100%">Eintragen</button>
+    </div>`;
+  const row=(a)=>{ const du=a.date?daysUntil(a.date):null;
+    return `<div class="adv-row" data-adv="${a.id}">
+      ${a.date?`<div class="adv-days">${du===0?"heute":du}<small>${du===0?"":(du===1?"Tag":"Tage")}</small></div>`:`<div class="adv-days" style="font-size:22px">${advIcon(a.kind)}</div>`}
+      <div class="grow" style="min-width:0"><b>${a.date?advIcon(a.kind)+" ":""}${esc(a.title)}</b><div class="tiny muted">${a.date?fmtLong(a.date):(ADV_KINDS.find(k=>k.k===a.kind)||{}).label||""}${a.notes?" · "+esc(a.notes):""}</div></div>
+      <div class="row" style="gap:2px; flex:0 0 auto">
+        ${a.date?`<button class="btn ghost sm" data-advdone title="Erlebt">✓</button>`:`<button class="btn ghost sm" data-advdate title="Datum setzen">📅</button>`}
+        <button class="btn ghost sm" data-advdel title="Entfernen">✕</button>
+      </div></div>`; };
+  html+=`<div class="life-card"><h3>Demnächst</h3>${upcoming.length?upcoming.map(row).join(""):`<div class="muted small">Noch nichts mit Datum. Ein Wochenende reicht für den Anfang.</div>`}</div>`;
+  const grp=(kind,title)=>{ const l=ideas.filter(a=>(a.kind||"abenteuer")===kind); return l.length?`<div class="life-card"><h3>${title}</h3>${l.map(row).join("")}</div>`:""; };
+  html+=grp("misogi","Misogi-Ideen")+grp("reise","Reise-Ideen")+grp("solo","Solo-Wochen")+grp("sport","Sport-Ideen")+grp("abenteuer","Abenteuer-Ideen")+grp("treffen","Treffen");
+  if(past.length) html+=`<div class="life-card"><h3>Erlebt</h3>${past.slice(0,12).map(a=>`<div class="alive-row">${advIcon(a.kind)} ${esc(a.title)} <span class="tiny muted">${a.date?fmtDate(a.date):""}</span></div>`).join("")}</div>`;
+  const v=$("#view"); v.innerHTML=html;
+  const saveC=()=>{ S.compass=S.compass||{}; S.compass.misogi=$("#cpMisogi").value.trim(); S.compass.sportziel=$("#cpSport").value.trim(); S.compass.year=year+1; S.compass.updatedAt=Date.now(); save(); };
+  $("#cpMisogi").onchange=saveC; $("#cpSport").onchange=saveC;
+  $("#advSave").onclick=()=>{ const t=$("#advTitle").value.trim(); if(!t){ toast("Was möchtest du erleben?"); return; } addAdventure(t, $("#advDate").value||null, $("#advKind").value); toast("Eingetragen 🧭"); render(); };
+  $("#advTitle").onkeydown=e=>{ if(e.key==="Enter") $("#advSave").click(); };
+  v.querySelectorAll("[data-adv]").forEach(r=>{ const a=all.find(x=>x.id===r.dataset.adv); if(!a) return;
+    const dn=r.querySelector("[data-advdone]"); if(dn) dn.onclick=()=>{ a.done=true; a.updatedAt=Date.now(); save(); toast("Erlebt 🎉 – halte es gern unter Lebendig fest"); render(); };
+    const dd=r.querySelector("[data-advdate]"); if(dd) dd.onclick=async ()=>{ const rr=await uiPrompt("Wann?",[{key:"date",label:"Datum (JJJJ-MM-TT)",value:"",placeholder:"2027-02-14"}],"Setzen"); if(!rr||!/^\d{4}-\d{2}-\d{2}$/.test(rr.date||"")){ if(rr) toast("Bitte als 2027-02-14"); return; } a.date=rr.date; a.updatedAt=Date.now(); save(); render(); };
+    const dl=r.querySelector("[data-advdel]"); if(dl) dl.onclick=async ()=>{ if(!await uiConfirm("Eintrag entfernen?","Entfernen")) return; tombstone("adventures",a.id); S.adventures=S.adventures.filter(x=>x.id!==a.id); save(); render(); };
+  });
+}
+function addAdventure(title, date, kind, notes){ const a={id:uid(), title, date:date||null, kind:kind||"abenteuer", done:false, notes:notes||"", ts:todayStr(), updatedAt:Date.now()}; (S.adventures=S.adventures||[]).unshift(a); save(); return a; }
+
+/* ---- Things That Make Me Feel Alive ---- */
+function viewAlive(){
+  const list=[...(S.alive||[])].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  let html=`<div class="view-title">Lebendig</div><div class="life-sub">Jedes Mal, wenn du denkst: Das will ich wieder. Davon mehr.</div>
+    <div class="life-card"><textarea id="alNew" placeholder="Was hat sich gut angefühlt?" style="min-height:64px"></textarea>
+      <div class="row" style="gap:8px; margin-top:8px">${speechSupported()?`<button class="btn sec" id="alMic" title="Sprechen">🎤</button>`:""}<button class="btn grow" id="alSave">Festhalten</button></div></div>`;
+  if(!list.length) html+=`<div class="empty">Noch leer. Das ist in Ordnung – es füllt sich mit echten Momenten, nicht mit Plänen.</div>`;
+  else html+=`<div class="life-card">${list.map(a=>`<div class="alive-row" data-al="${a.id}"><div class="row" style="justify-content:space-between; gap:8px"><div class="grow">✨ ${esc(a.text)}<div class="tiny muted">${fmtDate(a.date)}</div></div><button class="btn ghost sm" data-aldel>✕</button></div></div>`).join("")}</div>`;
+  const v=$("#view"); v.innerHTML=html;
+  $("#alSave").onclick=()=>{ const t=$("#alNew").value.trim(); if(!t) return; (S.alive=S.alive||[]).unshift({id:uid(), text:t, date:todayStr(), updatedAt:Date.now()}); save(); toast("Festgehalten ✨"); render(); };
+  const mic=$("#alMic"); if(mic) mic.onclick=()=>startDictation($("#alNew"), mic);
+  v.querySelectorAll("[data-al]").forEach(r=>{ r.querySelector("[data-aldel]").onclick=async ()=>{ if(!await uiConfirm("Eintrag entfernen?","Entfernen")) return; const id=r.dataset.al; tombstone("alive",id); S.alive=S.alive.filter(x=>x.id!==id); save(); render(); }; });
+}
+
+/* ---- Mehr: ältere Tabs des Lebens, eine Ebene tiefer ---- */
+function viewMore(){
+  let html=`<div class="view-title">Mehr</div><div class="life-sub">Alles bleibt erhalten, nur nicht mehr im Vordergrund.</div><div class="life-card">`;
+  html+=LIFE_LEGACY.map(t=>`<div class="more-tile" data-go="${t.k}"><span class="ic">${t.icon}</span><div class="grow"><b>${esc(tabName(t.k))}</b><div class="tiny muted">${esc(t.sub)}</div></div><span class="chev">›</span></div>`).join("");
+  html+=`</div>
+    <div class="life-card"><h3>Erinnerungen</h3><div class="muted small">${S.ui.pushOn?"Aktiv auf diesem Gerät ✓":"Noch nicht aktiviert auf diesem Gerät."}</div>
+      <div class="row" style="gap:8px; margin-top:8px">${S.ui.pushOn?`<button class="btn sec" id="pushTest">Testnachricht senden</button><button class="btn sec" id="pushOff">Auf diesem Gerät aus</button>`:`<button class="btn" id="pushOn2">Erinnerungen aktivieren</button>`}</div></div>
+    <div class="life-card"><h3>Profil für eine KI</h3><div class="muted small" style="margin-bottom:8px">Alles, was du selbst eingetragen hast, als Text – zum Einfügen in einen Chat.</div><button class="btn sec" id="profExport" style="width:100%">⬇︎ Profil exportieren</button></div>`;
+  const v=$("#view"); v.innerHTML=html;
+  v.querySelectorAll("[data-go]").forEach(el=>el.onclick=()=>go(el.dataset.go));
+  const p2=$("#pushOn2"); if(p2) p2.onclick=pushSubscribe;
+  const pt=$("#pushTest"); if(pt) pt.onclick=pushTest;
+  const pf=$("#pushOff"); if(pf) pf.onclick=pushUnsubscribe;
+  $("#profExport").onclick=()=>{ try{ const blob=new Blob([lifeProfileText()],{type:"text/plain"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="mein-profil.txt"; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},200);}catch(e){toast("Export fehlgeschlagen");} };
+}
+function lifeProfileText(){
+  const c=S.compass||{}; let s="PROFIL – aus meinen eigenen Einträgen, Stand "+todayStr()+"\n\n";
+  if(S.creed) s+="Leitbild:\n"+S.creed+"\n\n";
+  if(c.misogi||c.sportziel) s+="Jahreskompass "+(c.year||"")+":\n"+(c.misogi?"- Misogi: "+c.misogi+"\n":"")+(c.sportziel?"- Sportziel: "+c.sportziel+"\n":"")+"\n";
+  const vals=collectValues(); if(vals.length){ s+="Werte und Antworten:\n"; vals.forEach(v=>s+="- "+(v.q||"")+"\n  "+v.a+"\n"); s+="\n"; }
+  const al=[...(S.alive||[])].sort((a,b)=>String(b.date).localeCompare(String(a.date))); if(al.length){ s+="Was mich lebendig fühlen lässt (Datum, eigener Eintrag):\n"; al.forEach(a=>s+="- "+a.date+": "+a.text+"\n"); s+="\n"; }
+  const adv=S.adventures||[]; if(adv.length){ s+="Erlebnisse und Ideen:\n"; adv.forEach(a=>s+="- ["+(a.kind||"")+(a.done?", erlebt":"")+"] "+a.title+(a.date?" ("+a.date+")":"")+"\n"); s+="\n"; }
+  if(S.wishes.length){ s+="100 Things:\n"; S.wishes.forEach(w=>s+="- "+w.title+(w.done?" (erlebt)":"")+"\n"); s+="\n"; }
+  const bd=S.builds||[]; if(bd.length){ s+="Build Projects:\n"; bd.forEach(b=>s+="- "+b.title+" ("+BUILD_PHASES[b.phase||0]+")\n"); s+="\n"; }
+  const wk=Object.keys(S.weekly||{}).sort().reverse().slice(0,8); if(wk.length){ s+="Wochenreflexionen:\n"; wk.forEach(k=>{ s+=k+"\n"; (S.weekly[k].a||[]).forEach((a,i)=>{ if(a) s+="  "+(WEEKLY_Q[i]||"Sonntagsfrage")+" "+a+"\n"; }); }); s+="\n"; }
+  const ev=Object.keys(S.mindAnswers||{}).sort().reverse().slice(0,30); if(ev.length){ s+="Abendantworten:\n"; ev.forEach(d=>{ const m=S.mindAnswers[d]; if(m&&m.a) s+="- "+d+": "+m.a+"\n"; }); s+="\n"; }
+  if(S.myThoughts.length){ s+="Leitsätze:\n"; S.myThoughts.forEach(t=>s+="- "+t.text+(t.source?" — "+t.source:"")+"\n"); s+="\n"; }
+  if(S.thoughts.length){ s+="Gedanken:\n"; S.thoughts.slice(0,30).forEach(t=>s+="- "+t.text+"\n"); }
+  return s;
+}
+
+/* ---- Eingang: ein Feld für alles, die App sortiert mit Rückfrage ---- */
+const INTAKE_TARGETS=[
+  {k:"things",    icon:"🌟", label:"100 Things"},
+  {k:"misogi",    icon:"🏔️", label:"Misogi-Ideen"},
+  {k:"reise",     icon:"✈️", label:"Reise-Ideen"},
+  {k:"abenteuer", icon:"🧭", label:"Erlebnis mit Datum"},
+  {k:"build",     icon:"🔨", label:"Build-Ideen"},
+  {k:"alive",     icon:"✨", label:"Lebendig (hat gutgetan)"},
+  {k:"notiz",     icon:"💭", label:"Notiz"},
+  {k:"todo",      icon:"✅", label:"Erledigung (Bereich Arbeit)"},
+];
+function targetMeta(k){ return INTAKE_TARGETS.find(t=>t.k===k)||INTAKE_TARGETS[6]; }
+const MONTHS_DE={januar:1,februar:2,märz:3,maerz:3,april:4,mai:5,juni:6,juli:7,august:8,september:9,oktober:10,november:11,dezember:12,jan:1,feb:2,mär:3,apr:4,jun:6,jul:7,aug:8,sep:9,sept:9,okt:10,nov:11,dez:12};
+function parseLooseDate(text){
+  const t=text.toLowerCase(); const today=todayStr(); const y=new Date().getFullYear();
+  const d=parseGermanDate(text); if(d && !/\b(heute)\b/.test(t)) return d.iso;
+  if(/\bpfingsten\b/.test(t)){ return (y+1)+"-05-16"; }   // Pfingstsonntag 2027: 16. Mai
+  if(/\bsilvester\b/.test(t)) return y+"-12-31";
+  if(/\bweihnachten\b/.test(t)) return y+"-12-24";
+  for(const name in MONTHS_DE){ const re=new RegExp("\\b(?:im|anfang|mitte|ende)?\\s*"+name+"\\b(?:\\s*(\\d{4}))?"); const m=t.match(re); if(m){ let yy=m[1]?+m[1]:y; const mo=MONTHS_DE[name]; let day=15; if(/anfang/.test(m[0])) day=5; if(/ende/.test(m[0])) day=25; let iso=`${yy}-${String(mo).padStart(2,"0")}-${String(day).padStart(2,"0")}`; if(!m[1] && iso<today) iso=`${yy+1}-${String(mo).padStart(2,"0")}-${String(day).padStart(2,"0")}`; return iso; } }
+  return null;
+}
+function _tok(s){ return (s||"").toLowerCase().replace(/[^a-zäöüß0-9\s]/g," ").split(/\s+/).filter(w=>w.length>=4); }
+function localClassify(text){
+  const t=text.toLowerCase(); const toks=new Set(_tok(text));
+  // 1) gelernte Paare: deutliche Überschneidung gewinnt
+  let best=null, bestN=0;
+  (S.sortPairs||[]).forEach(p=>{ const n=_tok(p.text).filter(w=>toks.has(w)).length; if(n>bestN && n>=2){ bestN=n; best=p.target; } });
+  if(best) return {target:best, title:text.trim(), date:parseLooseDate(text), why:"wie früher einsortiert"};
+  const date=parseLooseDate(text);
+  const past=/\b(war|hatte|habe|haben|hat|gemacht|gewesen|genossen|gutgetan|gut getan|schön|toll|genial|heute|gestern)\b/.test(t) && !/\b(will|möchte|mal|irgendwann|wäre|könnte|plan|nächst)\b/.test(t);
+  if(past && /\b(schön|toll|gut|genial|genossen|spaß|lebendig|gelacht|cool)\b/.test(t)) return {target:"alive", title:text.trim(), date:null, why:"klingt nach einem guten Moment"};
+  if(/\b(misogi|alpenüberquerung|überquerung|marathon|triathlon|ironman|200 ?km|mehrtägig|mehrtages|5 tage|solo.?wander|durchquer)\b/.test(t)) return {target:"misogi", title:text.trim(), date, why:"größer als gewohnt"};
+  if(/\b(bauen|basteln|regal|lampe|holz|diy|minibar|bar bauen|halter|werkstatt|palette|paletten|schleifen|lackier|sideboard|hocker|tisch bauen|wandregal)\b/.test(t)) return {target:"build", title:text.trim(), date:null, why:"etwas zum Selberbauen"};
+  if(/\b(anrufen|bezahlen|rechnung|überweis|kündigen|termin machen|arzt|zahnarzt|steuer|antrag|einreichen|bestellen|abgeben|versicherung|formular|beantragen)\b/.test(t)) return {target:"todo", title:text.trim(), date, why:"klingt nach einer Erledigung"};
+  const travel=/\b(reise|trip|urlaub|roadtrip|nachtzug|strand|insel|camper|wochenende in|nach [a-zäöü]+|barcelona|lissabon|portugal|spanien|italien|japan|vietnam|ibiza|berge|hütte|waldhütte|festival|konzert|eishockey|ausflug)\b/.test(t);
+  if(date && travel) return {target:"abenteuer", title:text.trim(), date, why:"ein Erlebnis mit Datum"};
+  if(date) return {target:"abenteuer", title:text.trim(), date, why:"hat ein Datum"};
+  if(/\b(reise|trip|urlaub|roadtrip|nachtzug|camper|rundreise|backpack|monat in|woche in|wochen in)\b/.test(t)) return {target:"reise", title:text.trim(), date:null, why:"eine Reise ohne Datum"};
+  if(/\b(mal|irgendwann|will ich|möchte|wäre cool|wäre schön|lernen|ausprobieren|erleben|machen|schaffen|klimmzüge|spielen|kochen|brauen|surfen|snowboard)\b/.test(t)) return {target:"things", title:text.trim(), date:null, why:"etwas, das du erleben willst"};
+  return {target:"notiz", title:text.trim(), date:null, why:"ein Gedanke"};
+}
+async function aiClassify(entry){
+  if(location.protocol!=="https:") return null;
+  try{
+    const ctrl=new AbortController(); const tm=setTimeout(()=>ctrl.abort(), 9000);
+    const r=await fetch("/api/sort",{method:"POST",headers:{"content-type":"application/json"},signal:ctrl.signal,
+      body:JSON.stringify({text:entry.text, today:todayStr(), examples:(S.sortPairs||[]).slice(0,30).map(p=>({text:p.text,target:p.target}))})});
+    clearTimeout(tm);
+    if(!r.ok) return null;
+    const j=await r.json();
+    if(!j || !INTAKE_TARGETS.some(t=>t.k===j.target)) return null;
+    return {target:j.target, title:(j.title||entry.text).trim(), date:(/^\d{4}-\d{2}-\d{2}$/.test(j.date||"")?j.date:null), why:j.why||"", ai:true};
+  }catch(e){ return null; }
+}
+function guessWishCat(title){
+  const t=title.toLowerCase();
+  if(/\b(reise|trip|urlaub|barcelona|lissabon|portugal|spanien|italien|japan|vietnam|ibiza|strand|insel|roadtrip|hütte|nacht unter|sonnenaufgang|monat in)\b/.test(t)) return "Reisen & Abenteuer";
+  if(/\b(triathlon|marathon|klimmzüge|km|snowboard|surfen|rad|schwimm|lauf)\b/.test(t)) return "Challenges & Körper";
+  if(/\b(online|€|euro|digital|produkt|verdienen)\b/.test(t)) return "Freiheit & Online";
+  if(/\b(bauen|bild|zeichnen|leinwand|video|kunst|lampe)\b/.test(t)) return "Kreativität & Build";
+  if(/\b(smartphone|handy|fremd|kompliment|buch|lesen|alleine|sprache|lernen|kurs)\b/.test(t)) return "Komfortzone & Lernen";
+  if(/\b(kochen|sushi|bier|wein|braten|barista|rezept)\b/.test(t)) return "Kochen & Fähigkeiten";
+  if(/\b(beschenken|kuscheln|bett|auszeit|freund|familie|partner|dinner)\b/.test(t)) return "Beziehungen & Momente";
+  if(/\b(kleiderschrank|parfüm|baum|wohnung|balkon|garten)\b/.test(t)) return "Zuhause & Natur";
+  return "Erlebnisse & Spaß";
+}
+function fileIntake(entry, target, opt){
+  opt=opt||{}; const title=(opt.title||entry.text).trim(); const now=Date.now(); let tid=null;
+  if(target==="things"){ const w={id:uid(), title, cat:guessWishCat(title), notes:"", done:false, ts:todayStr(), updatedAt:now, fromIntake:entry.id}; S.wishes.unshift(w); tid=w.id; }
+  else if(target==="misogi"){ tid=addAdventure(title, null, "misogi").id; }
+  else if(target==="reise"){ tid=addAdventure(title, opt.date||null, "reise").id; }
+  else if(target==="abenteuer"){ tid=addAdventure(title, opt.date||null, "abenteuer").id; }
+  else if(target==="build"){ const b={id:uid(), title, phase:0, active:!activeBuild(), ts:todayStr(), updatedAt:now}; (S.builds=S.builds||[]).unshift(b); tid=b.id; }
+  else if(target==="alive"){ const a={id:uid(), text:title, date:todayStr(), updatedAt:now}; (S.alive=S.alive||[]).unshift(a); tid=a.id; }
+  else if(target==="notiz"){ const n={id:uid(), text:title, tag:"Eingang", ts:now, updatedAt:now}; S.thoughts.unshift(n); tid=n.id; }
+  else if(target==="todo"){ const t=addTodo({title, priority:2, areaId:(areaById("a_privat")?"a_privat":ensureInbox().id), dueDate:opt.date||null}); tid=t.id; }
+  entry.status="filed"; entry.target=target; entry.targetId=tid; entry.updatedAt=now;
+  // lernen: Text + gewählte Liste als Beispiel merken (max. 60)
+  (S.sortPairs=S.sortPairs||[]).unshift({id:uid(), text:entry.text, target, updatedAt:now}); while(S.sortPairs.length>60) S.sortPairs.pop();
+  save();
+}
+function proposeHTML(e){
+  const p=e.proposal||{target:"notiz", title:e.text}; const m=targetMeta(p.target);
+  const pick=e.ui_pick;
+  return `<div class="propose">
+    <div class="pt">${m.icon} Klingt nach <b>${esc(m.label)}</b>${p.date?` · ${fmtLong(p.date)}`:""}.${p.why?` <span class="tiny muted">${esc(p.why)}${p.ai?"":" · lokale Einschätzung"}</span>`:""}</div>
+    ${pick?`<div class="field"><select data-pick="${e.id}">${INTAKE_TARGETS.map(t=>`<option value="${t.k}" ${t.k===p.target?"selected":""}>${t.icon} ${t.label}</option>`).join("")}</select></div>`:""}
+    <div class="row" style="gap:8px">
+      <button class="btn grow" data-file="${e.id}">${pick?"Dort ablegen":"Ja, ablegen"}</button>
+      ${pick?"":`<button class="btn sec" data-other="${e.id}">Andere Liste</button>`}
+      <button class="btn ghost sm" data-keep="${e.id}" title="Bleibt im Eingang, nichts wird verschoben">Nur merken</button>
+    </div></div>`;
+}
+function lifeMigrationCandidates(){
+  const areas=S.areas.filter(a=>a.id==="a_privat" || /lifestyle|leben|life/i.test(a.name)).map(a=>a.id);
+  return S.todos.filter(t=>areas.includes(t.areaId) && todoOpen(t) && !t.project && !t.lifeOffered && !t.daily && !(t.repeat&&t.repeat.unit));
+}
+function viewIntake(){
+  const open=(S.intake||[]).filter(e=>e.status==="open").sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const kept=(S.intake||[]).filter(e=>e.status==="kept").sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const filed=(S.intake||[]).filter(e=>e.status==="filed").sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).slice(0,10);
+  const cand=lifeMigrationCandidates().slice(0,4);
+  let html=`<div class="view-title">Eingang</div><div class="life-sub">Alles darf hier rein. Du musst nicht wissen, wohin es gehört.</div>
+    <div class="life-card"><textarea id="inText" placeholder="Eine Idee, ein Wunsch, etwas Schönes von heute, ein Ort, ein Termin …" style="min-height:72px"></textarea>
+      <div class="row" style="gap:8px; margin-top:8px">${speechSupported()?`<button class="btn sec" id="inMic" title="Sprechen">🎤</button>`:""}<button class="btn grow" id="inAdd">Ablegen</button></div></div>`;
+  if(open.length) html+=open.map(e=>`<div class="life-card" data-in="${e.id}"><div style="white-space:pre-wrap; word-break:break-word">${esc(e.text)}</div><div class="tiny muted" style="margin-top:4px">${fmtDate(isoLocal(new Date(e.ts)))}${e.proposal?"":" · wird eingeordnet …"}</div>${proposeHTML(e)}</div>`).join("");
+  if(cand.length) html+=`<div class="proj-head">Aus deinen privaten To-dos</div><div class="tiny muted" style="margin:-4px 0 8px">Diese sehen nach Leben aus, nicht nach Erledigung. Du entscheidest pro Eintrag; nichts wird gelöscht.</div>`+cand.map(t=>{ const p=localClassify(t.title); const m=targetMeta(p.target);
+    return `<div class="life-card" data-mig="${t.id}"><div>${esc(t.title)}</div><div class="propose"><div class="pt">${m.icon} Vorschlag: <b>${esc(m.label)}</b></div>
+      <div class="field"><select data-migsel>${INTAKE_TARGETS.filter(x=>x.k!=="todo").map(x=>`<option value="${x.k}" ${x.k===p.target?"selected":""}>${x.icon} ${x.label}</option>`).join("")}</select></div>
+      <div class="row" style="gap:8px"><button class="btn grow" data-migyes>Ins Leben übernehmen</button><button class="btn sec" data-migno>Als To-do behalten</button></div></div></div>`; }).join("");
+  if(kept.length) html+=`<div class="proj-head">Gemerkt</div>`+kept.map(e=>`<div class="intake-row" data-in="${e.id}"><div class="txt">${esc(e.text)}<div class="tiny muted">${fmtDate(isoLocal(new Date(e.ts)))}</div></div><button class="btn ghost sm" data-reopen="${e.id}" title="Doch einsortieren">↪</button><button class="btn ghost sm" data-indel="${e.id}">✕</button></div>`).join("");
+  if(filed.length) html+=`<div class="proj-head">Zuletzt einsortiert</div>`+filed.map(e=>{ const m=targetMeta(e.target); return `<div class="intake-row"><div class="txt">${esc(e.text)}<div class="tiny muted">${m.icon} ${esc(m.label)}</div></div></div>`; }).join("");
+  const v=$("#view"); v.innerHTML=html;
+  const add=()=>{ const t=$("#inText").value.trim(); if(!t) return; $("#inText").value="";
+    const e={id:uid(), text:t, ts:Date.now(), status:"open", proposal:localClassify(t), updatedAt:Date.now()};
+    (S.intake=S.intake||[]).unshift(e); save(); render();
+    aiClassify(e).then(p=>{ if(!p) return; const cur=(S.intake||[]).find(x=>x.id===e.id); if(!cur||cur.status!=="open") return; cur.proposal=p; cur.updatedAt=Date.now(); save(); if(S.ui.active==="intake") render(); });
+  };
+  $("#inAdd").onclick=add; $("#inText").onkeydown=e=>{ if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)) add(); };
+  const mic=$("#inMic"); if(mic) mic.onclick=()=>startDictation($("#inText"), mic);
+  v.querySelectorAll("[data-file]").forEach(b=>b.onclick=()=>{ const e=S.intake.find(x=>x.id===b.dataset.file); if(!e) return; const sel=v.querySelector(`[data-pick="${e.id}"]`); const target=sel?sel.value:(e.proposal||{}).target||"notiz"; const p=e.proposal||{}; fileIntake(e, target, {title:p.title, date:p.date}); toast(`${targetMeta(target).icon} Abgelegt in ${targetMeta(target).label}`); render(); });
+  v.querySelectorAll("[data-other]").forEach(b=>b.onclick=()=>{ const e=S.intake.find(x=>x.id===b.dataset.other); if(e){ e.ui_pick=true; render(); } });
+  v.querySelectorAll("[data-keep]").forEach(b=>b.onclick=()=>{ const e=S.intake.find(x=>x.id===b.dataset.keep); if(e){ e.status="kept"; e.ui_pick=false; e.updatedAt=Date.now(); save(); render(); } });
+  v.querySelectorAll("[data-reopen]").forEach(b=>b.onclick=()=>{ const e=S.intake.find(x=>x.id===b.dataset.reopen); if(e){ e.status="open"; e.proposal=e.proposal||localClassify(e.text); e.updatedAt=Date.now(); save(); render(); } });
+  v.querySelectorAll("[data-indel]").forEach(b=>b.onclick=async ()=>{ if(!await uiConfirm("Eintrag aus dem Eingang entfernen?","Entfernen")) return; const id=b.dataset.indel; tombstone("intake",id); S.intake=S.intake.filter(x=>x.id!==id); save(); render(); });
+  v.querySelectorAll("[data-mig]").forEach(card=>{ const t=S.todos.find(x=>x.id===card.dataset.mig); if(!t) return;
+    card.querySelector("[data-migyes]").onclick=()=>{ const target=card.querySelector("[data-migsel]").value; const e={id:uid(), text:t.title, ts:Date.now(), status:"open", updatedAt:Date.now(), fromTodo:t.id}; (S.intake=S.intake||[]).unshift(e); fileIntake(e, target, {title:t.title, date:t.dueDate||null}); t.lifeOffered=true; t.done=true; t.doneAt=todayStr(); t.notes=("→ ins Leben übernommen ("+targetMeta(target).label+")"+(t.notes?"\n"+t.notes:"")); t.updatedAt=Date.now(); save(); toast(`${targetMeta(target).icon} Übernommen`); render(); };
+    card.querySelector("[data-migno]").onclick=()=>{ t.lifeOffered=true; t.updatedAt=Date.now(); save(); render(); };
+  });
+}
+
+/* ---- Web Push (über den eigenen Server /api/push) ---- */
+function isIOS(){ return /iPhone|iPad|iPod/.test(navigator.userAgent); }
+function isStandalone(){ return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone===true; }
+function pushSupported(){ return ("serviceWorker" in navigator) && ("PushManager" in window) && ("Notification" in window) && location.protocol==="https:"; }
+function _b64url(s){ const pad="=".repeat((4-s.length%4)%4); const b=(s+pad).replace(/-/g,"+").replace(/_/g,"/"); const raw=atob(b); return Uint8Array.from([...raw].map(c=>c.charCodeAt(0))); }
+async function pushSubscribe(){
+  if(!pushSupported()){ toast("Benachrichtigungen sind hier nicht verfügbar"); return; }
+  if(isIOS() && !isStandalone()){ toast("Bitte zuerst zum Home-Bildschirm hinzufügen und von dort öffnen"); return; }
+  try{
+    const perm=await Notification.requestPermission(); if(perm!=="granted"){ toast("Keine Erlaubnis erteilt"); return; }
+    const reg=await navigator.serviceWorker.ready;
+    const kr=await fetch("/api/push?pubkey=1"); if(!kr.ok) throw new Error("Server antwortet nicht ("+kr.status+")");
+    const {publicKey}=await kr.json(); if(!publicKey) throw new Error("Kein VAPID-Schlüssel auf dem Server");
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:_b64url(publicKey)});
+    const r=await fetch("/api/push",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({sub:sub.toJSON(), tz:"Europe/Berlin", device:navigator.userAgent.slice(0,120)})});
+    if(!r.ok) throw new Error("Abo konnte nicht gespeichert werden ("+r.status+")");
+    S.ui.pushOn=true; S.ui.pushDismissed=false; save(); render(); toast("Erinnerungen aktiv 🔔");
+  }catch(e){ toast("Fehler: "+(e.message||e)); }
+}
+async function pushUnsubscribe(){
+  try{ const reg=await navigator.serviceWorker.ready; const sub=await reg.pushManager.getSubscription();
+    if(sub){ await fetch("/api/push",{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({endpoint:sub.endpoint})}).catch(()=>{}); await sub.unsubscribe(); }
+    S.ui.pushOn=false; save(); render(); toast("Erinnerungen auf diesem Gerät aus");
+  }catch(e){ toast("Fehler: "+(e.message||e)); }
+}
+async function pushTest(){
+  try{ const reg=await navigator.serviceWorker.ready; const sub=await reg.pushManager.getSubscription(); if(!sub){ toast("Kein Abo auf diesem Gerät"); return; }
+    const r=await fetch("/api/push?test=1",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({endpoint:sub.endpoint})});
+    toast(r.ok?"Testnachricht unterwegs":"Server-Fehler "+r.status);
+  }catch(e){ toast("Fehler: "+(e.message||e)); }
 }
 
 /* ============================ CHAT ============================ */
@@ -3418,11 +4006,13 @@ $("#chatInput").addEventListener("keydown",e=>{ if(e.key==="Enter") chatSend(); 
 
 /* ============================ GERÄTE-SYNC (Ende-zu-Ende) ============================ */
 function syncApiURL(){ const b=(S.sync&&S.sync.apiBase&&S.sync.apiBase.trim())||(location.origin+"/api/sync"); return b; }
-function stateWeight(s){ if(!s) return 0; return (s.todos?s.todos.length:0)+(s.goals?s.goals.length:0)+(s.bookmarks?s.bookmarks.length:0)+(s.ideas?s.ideas.length:0)+(s.wishes?s.wishes.length:0)+(s.myThoughts?s.myThoughts.length:0)+(s.thoughts?s.thoughts.length:0)+(s.mindAnswers?Object.keys(s.mindAnswers).length:0)+(s.mood?Object.keys(s.mood).length:0)+(s.areas&&s.areas.length>2?s.areas.length-2:0); }
+function stateWeight(s){ if(!s) return 0; return (s.todos?s.todos.length:0)+(s.goals?s.goals.length:0)+(s.bookmarks?s.bookmarks.length:0)+(s.ideas?s.ideas.length:0)+(s.wishes?s.wishes.length:0)+(s.myThoughts?s.myThoughts.length:0)+(s.thoughts?s.thoughts.length:0)+(s.mindAnswers?Object.keys(s.mindAnswers).length:0)+(s.mood?Object.keys(s.mood).length:0)+(s.areas&&s.areas.length>2?s.areas.length-2:0)
+  +(s.intake?s.intake.length:0)+(s.alive?s.alive.length:0)+(s.adventures?s.adventures.length:0)+(s.builds?s.builds.length:0)+(s.weekly?Object.keys(s.weekly).length:0)+(s.monthly?Object.keys(s.monthly).length:0); }
 
 /* ---- Zusammenführung (Merge) auf Eintrags-Ebene ---- */
-const LIST_COLLS=["todos","goals","bookmarks","ideas","wishes","thoughts","relationship","myThoughts","areas","routines","players","lessons","sprints"];
-const MAP_COLLS=["mindAnswers","mindDayQ","mindDayR","mindDayQuote","valuesDayQ","valuesAns","dayGoalLog"];
+const LIST_COLLS=["todos","goals","bookmarks","ideas","wishes","thoughts","relationship","myThoughts","areas","routines","players","lessons","sprints",
+  "intake","alive","adventures","builds","sortPairs"];
+const MAP_COLLS=["mindAnswers","mindDayQ","mindDayR","mindDayQuote","valuesDayQ","valuesAns","dayGoalLog","weekly","monthly","lifeMorning"];
 function _itemTime(it){ return (it&&(it.updatedAt||0))||0; }
 function mergeList(localArr, remoteArr, localTomb, remoteTomb, tombAcc){
   const tomb={};
@@ -3680,13 +4270,32 @@ updateSyncBtn();
 lockCheck();
 captureDayGoal(); rollForwardPlan();
 if(S.sync&&S.sync.enabled&&S.sync.pass){ (async()=>{ try{ const pr=await syncPull(); if(pr.status==="pulled") render(); else await syncPush(); }catch(e){} })(); }
-if(!SPECIALS_LEFT.some(s=>s.k===S.ui.active) && !SPECIALS_RIGHT.some(s=>s.k===S.ui.active)
-   && !(S.ui.active||"").startsWith("area:")) S.ui.active="overview";
+/* Start: immer im Bereich Leben. Ein Deep Link (?open=…) aus einer Erinnerung öffnet direkt die Aktion. */
+(function initMode(){
+  const validWork = k => SPECIALS_LEFT.some(s=>s.k===k) || SPECIALS_RIGHT.some(s=>s.k===k) || (k||"").startsWith("area:");
+  if(S.ui.active && validWork(S.ui.active)) S.ui.lastWork=S.ui.active;
+  if(S.ui.active && isLifeKey(S.ui.active)) S.ui.lastLife=S.ui.active;
+  S.ui.mode="leben"; S.ui.active="today";
+  const open=(new URLSearchParams(location.search).get("open")||"").toLowerCase();
+  if(open==="abend"){ S.ui.forceEvening=true; }
+  else if(open==="morgen"){ S.ui.forceMorning=true; }
+  else if(open==="woche"){ S.ui.active="weekly"; }
+  else if(open==="monat"){ S.ui.active="monthly"; }
+  else if(open==="things"){ S.ui.active="wishes"; }
+  else if(open==="eingang"){ S.ui.active="intake"; }
+  else if(open==="stunden"){ S.ui.mode="arbeit"; S.ui.active="hours"; }
+  else if(open==="arbeit"){ S.ui.mode="arbeit"; S.ui.active=(S.ui.lastWork&&validWork(S.ui.lastWork))?S.ui.lastWork:"overview"; }
+  if(open){ try{ history.replaceState(null,"",location.pathname); }catch(e){} }
+})();
+/* 100 Things einmalig mit der Startliste auffüllen (nur Titel, die noch fehlen; bestehende Einträge bleiben unverändert) */
+if(!S.thingsSeeded){ const n=importThingsSeed(); S.thingsSeeded=true; save(); if(n) setTimeout(()=>toast(n+" Einträge in 100 Things ergänzt"), 600); }
+$("#modeBtn").onclick=()=>{ if(inLife()) enterWork(); else setMode("leben"); };
+$("#endWorkBtn").onclick=endWork;
 render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-10-22.40";
+const APP_VERSION="2026-11-04.41";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;

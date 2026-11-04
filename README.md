@@ -41,3 +41,10 @@ ohne Server und ohne Datenbank – alle Daten liegen lokal im Gerät (localStora
 - `index.html` – die App (HTML/CSS/JS inline), plus `manifest.webmanifest`.
 - `api/sync.js` – optionaler Serverless-Endpunkt für den Geräte-Sync (Vercel + Postgres).
 - `package.json` – nur für den Sync-Endpunkt (`pg`). Die App selbst braucht keinen Build.
+
+## Bereich Leben / Arbeit (seit 2026-11-04)
+Die App öffnet immer im Bereich **Leben** (Heute, Eingang, Erlebnisse, 100 Things, Alive, Mehr) und wechselt über „💼 Arbeit" in den bisherigen To-do-Bereich.
+- `api/sort.js` ordnet Eingaben aus dem Eingang per Claude API ein (braucht `ANTHROPIC_API_KEY`).
+- `api/push.js` sendet Web-Push-Erinnerungen (21:00 Abendfrage, So 18:00 Wochenrückblick, 1. So 18:15 Monatsplanung, 15. 18:00 100 Things). Tabellen und VAPID-Schlüssel legt es selbst in der Datenbank an (`DATABASE_URL`).
+- `.github/workflows/reminders.yml` ruft den Endpoint alle 10 Minuten auf. Bei eigener Domain `APP_URL` als Repository-Variable setzen. Optional `CRON_SECRET` (Vercel-Env + GitHub-Secret) zum Absichern.
+- Deep Links: `/?open=abend|woche|monat|things|eingang|arbeit|stunden`.
