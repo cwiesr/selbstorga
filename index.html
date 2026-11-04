@@ -934,6 +934,13 @@ function addTodo(o){
     daily:!!o.daily, dailyUntil:o.dailyUntil||null, dailyLog:{}, delegated:!!o.delegated, repeat:o.repeat||null, attachments:[], mit:!!o.mit, planDay:o.planDay||null};
   S.todos.unshift(t); save(); return t;
 }
+/* --- Duplikat-Erkennung: erkennt ein bereits vorhandenes To-do mit (fast) gleichem Titel --- */
+function _normTitle(s){ try{ return String(s||"").toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N} ]+/gu," ").replace(/\s+/g," ").trim(); }catch(_){ return String(s||"").toLowerCase().replace(/\s+/g," ").trim(); } }
+function findDupTodo(title, excludeId){ const n=_normTitle(title); if(!n || n.length<2) return null; return (S.todos||[]).find(t=>t.id!==excludeId && _normTitle(t.title)===n) || null; }
+function dupWhere(d){ return (d.areaId&&areaById(d.areaId)) ? areaById(d.areaId).name : (d.project||""); }
+function dupInfo(d){ const w=dupWhere(d); const status=todoDone(d)?"erledigt":"offen"; return `„${d.title}" gibt es schon${w?` in „${w}"`:""} (${status}${d.dueDate?`, fällig ${fmtDate(d.dueDate)}`:""}).`; }
+function confirmNewTodo(title){ const d=findDupTodo(title,null); if(!d) return Promise.resolve(true); return uiConfirm(dupInfo(d)+" Trotzdem neu anlegen?","Trotzdem anlegen"); }
+function warnDupToast(title, newId){ const d=findDupTodo(title,newId); if(d){ const w=dupWhere(d); toast("⚠️ Gibt es evtl. schon"+(w?` in „${w}"`:"")); } }
 /* --- Wiederkehrende To-dos: Frist rückt beim Abhaken zum nächsten Termin vor --- */
 function repeatPreset(r){ if(!r||!r.unit) return ""; const e=r.every||1;
   if(r.unit==="week"&&e===1) return "week";
@@ -2001,13 +2008,15 @@ function bindTagesplan(root){
 const OV_WIDGETS=["tagesplan","tagesziel","routinen","erinnerung","quickadd","tageboard"];
 const OV_WIDE=new Set(["tagesplan","tageboard"]);
 function ovOrder(){
-  let ord=((S.ui&&S.ui.ovWidgetOrder)||[]).filter(k=>OV_WIDGETS.includes(k));
+  // geräteübergreifend: Reihenfolge liegt top-level (wird synchronisiert), nicht in S.ui
+  if((!S.ovWidgetOrder||!S.ovWidgetOrder.length) && S.ui && S.ui.ovWidgetOrder && S.ui.ovWidgetOrder.length){ S.ovWidgetOrder=S.ui.ovWidgetOrder.slice(); }
+  let ord=(S.ovWidgetOrder||[]).filter(k=>OV_WIDGETS.includes(k));
   OV_WIDGETS.forEach(k=>{ if(!ord.includes(k)) ord.push(k); });
   return ord;
 }
 function ovIsOpen(id){ return !!(S.ui&&S.ui.ovOpen&&S.ui.ovOpen[id]); }   // Standard: zugeklappt
 function ovToggle(id){ S.ui=S.ui||{}; S.ui.ovOpen=S.ui.ovOpen||{}; S.ui.ovOpen[id]=!S.ui.ovOpen[id]; save(); render(); }
-function ovMove(id, dir){ const ord=ovOrder(); const i=ord.indexOf(id), j=i+dir; if(i<0||j<0||j>=ord.length) return; [ord[i],ord[j]]=[ord[j],ord[i]]; S.ui=S.ui||{}; S.ui.ovWidgetOrder=ord; save(); render(); }
+function ovMove(id, dir){ const ord=ovOrder(); const i=ord.indexOf(id), j=i+dir; if(i<0||j<0||j>=ord.length) return; [ord[i],ord[j]]=[ord[j],ord[i]]; S.ovWidgetOrder=ord; save(); render(); }
 function renderBento(){
   const date=planSelDate();
   const doneToday=S.todos.filter(t=>todoDoneToday(t)).length;
@@ -2094,7 +2103,7 @@ function bindBento(root){
     w.addEventListener("dragover",e=>{ e.preventDefault(); w.classList.add("drop-before"); });
     w.addEventListener("dragleave",e=>{ if(e.target===w) w.classList.remove("drop-before"); });
     w.addEventListener("drop",e=>{ e.preventDefault(); w.classList.remove("drop-before"); let src=dragId; try{ src=e.dataTransfer.getData("text/plain")||dragId; }catch(_){ } const dst=w.dataset.w;
-      if(src&&dst&&src!==dst){ const ord=ovOrder(); ord.splice(ord.indexOf(src),1); ord.splice(ord.indexOf(dst),0,src); S.ui=S.ui||{}; S.ui.ovWidgetOrder=ord; save(); render(); } });
+      if(src&&dst&&src!==dst){ const ord=ovOrder(); ord.splice(ord.indexOf(src),1); ord.splice(ord.indexOf(dst),0,src); S.ovWidgetOrder=ord; save(); render(); } });
   });
 }
 
@@ -2169,7 +2178,8 @@ function viewOverview(){
   });
   // Neues To-do (nur gebunden, wenn Kachel offen)
   const q=$("#qadd"), qb=$("#qaddBtn");
-  const doQ=()=>{ if(!q) return; const val=q.value.trim(); if(!val) return;
+  const doQ=async()=>{ if(!q) return; const val=q.value.trim(); if(!val) return;
+    if(!(await confirmNewTodo(val))) return;
     const areaId=($("#qArea")&&$("#qArea").value) ? $("#qArea").value : ensureInbox().id;
     addTodo({title:val, priority:+($("#qPrio")&&$("#qPrio").value)||2, areaId,
       project:($("#qProj")?$("#qProj").value.trim():""),
@@ -2302,8 +2312,9 @@ function viewArea(id){
 
   const v=$("#view"); v.innerHTML=html;
   // add todo
-  $("#ntAdd").onclick=()=>{
+  $("#ntAdd").onclick=async()=>{
     const title=$("#ntTitle").value.trim(); if(!title){ toast("Titel fehlt"); return; }
+    if(!(await confirmNewTodo(title))) return;
     addTodo({title, priority:+$("#ntPrio").value, project:$("#ntProj").value.trim(),
       dueDate:$("#ntDue").value||null, followUpDate:$("#ntFollow").value||null, areaId:id,
       notes:($("#ntNotes")?$("#ntNotes").value.trim():""), repeat:presetToRepeat($("#ntRepeat")?$("#ntRepeat").value:""),
@@ -2952,7 +2963,8 @@ function viewIdeas(){
       if(b.dataset.idact==="del"){ uiConfirm("Diese Idee löschen?","Löschen").then(ok=>{ if(ok){ tombstone("ideas",id); S.ideas=S.ideas.filter(x=>x.id!==id); save(); render(); } }); }
       if(b.dataset.idact==="topromote"){
         const i=S.ideas.find(x=>x.id===id);
-        addTodo({title:i.title, notes:i.notes, priority:2, areaId:ensureInbox().id});
+        const nt=addTodo({title:i.title, notes:i.notes, priority:2, areaId:ensureInbox().id});
+        warnDupToast(i.title, nt.id);
         toast("Als To-do im Eingang angelegt"); go("area:"+ensureInbox().id);
       }
     });
@@ -3443,7 +3455,7 @@ function fileIntake(entry, target, opt){
   else if(target==="build"){ const b={id:uid(), title, phase:0, active:!activeBuild(), ts:todayStr(), updatedAt:now}; (S.builds=S.builds||[]).unshift(b); tid=b.id; }
   else if(target==="alive"){ const a={id:uid(), text:title, date:todayStr(), updatedAt:now}; (S.alive=S.alive||[]).unshift(a); tid=a.id; }
   else if(target==="notiz"){ const n={id:uid(), text:title, tag:"Eingang", ts:now, updatedAt:now}; S.thoughts.unshift(n); tid=n.id; }
-  else if(target==="todo"){ const t=addTodo({title, priority:2, areaId:(areaById("a_privat")?"a_privat":ensureInbox().id), dueDate:opt.date||null}); tid=t.id; }
+  else if(target==="todo"){ const t=addTodo({title, priority:2, areaId:(areaById("a_privat")?"a_privat":ensureInbox().id), dueDate:opt.date||null}); tid=t.id; warnDupToast(title, t.id); }
   entry.status="filed"; entry.target=target; entry.targetId=tid; entry.updatedAt=now;
   // lernen: Text + gewählte Liste als Beispiel merken (max. 60)
   (S.sortPairs=S.sortPairs||[]).unshift({id:uid(), text:entry.text, target, updatedAt:now}); while(S.sortPairs.length>60) S.sortPairs.pop();
@@ -3578,6 +3590,7 @@ function chatProcess(text){
   }
   const p=parseTodo(text);
   const t=addTodo({title:p.title, priority:p.priority, dueDate:p.dueDate, followUpDate:p.followUpDate, areaId:p.areaId});
+  warnDupToast(p.title, t.id);
   const a=areaById(t.areaId);
   let reply=`✓ Angelegt: „${p.title}"\n`;
   reply+=`• Bereich: ${a?a.name:"Eingang"}\n`;
@@ -4515,7 +4528,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-11-04.43";
+const APP_VERSION="2026-11-04.44";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
