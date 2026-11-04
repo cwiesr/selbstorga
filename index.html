@@ -183,6 +183,48 @@
       width:calc(100vw - 28px); margin-left:calc(50% - 50vw + 14px)}
     .spr-row > .spr-card{flex:1 1 auto; width:auto; margin-left:0; min-width:0}
     .spr-row > .rtn-ov{flex:0 0 300px} }
+  /* ===== Bento-Dashboard (Übersicht) ===== */
+  .bento{display:grid; grid-template-columns:1fr; gap:10px; margin-bottom:14px}
+  @media(min-width:720px){ .bento{grid-template-columns:1fr 1fr; align-items:start;
+    width:calc(100vw - 28px); margin-left:calc(50% - 50vw + 14px)}
+    .bento .widget.wide{grid-column:1 / -1} }
+  .widget{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; align-self:start}
+  .widget.drop-before{box-shadow:0 -3px 0 0 var(--accent)}
+  .w-head{display:flex; align-items:center; gap:8px; padding:11px 12px; cursor:pointer; user-select:none}
+  .w-grip{cursor:grab; color:var(--muted2); font-size:14px; letter-spacing:-2px; flex:0 0 auto}
+  .w-ic{font-size:15px; flex:0 0 auto}
+  .w-name{font-weight:700; font-size:14px; flex:0 0 auto}
+  .w-sum{color:var(--muted); font-size:12px; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .w-moves{display:flex; gap:0; flex:0 0 auto; align-items:center}
+  .w-mv,.w-chev{background:transparent; border:0; color:var(--muted2); cursor:pointer; line-height:1; padding:4px 5px; border-radius:6px}
+  .w-mv{font-size:11px} .w-chev{font-size:11px; transition:transform .15s}
+  .w-mv:hover,.w-chev:hover{color:var(--text); background:var(--panel2)}
+  .widget.open .w-chev{transform:rotate(90deg)}
+  .w-body{display:none}
+  .widget.open .w-body{display:block; padding:12px; border-top:1px solid var(--border)}
+  /* 30-Minuten-Tagesplan */
+  .tp-nav{display:flex; align-items:center; gap:8px; margin-bottom:8px}
+  .tp-nav .nb{border:1px solid var(--border); background:var(--panel2); color:var(--text); border-radius:8px; width:30px; height:30px; cursor:pointer; font-size:15px; flex:0 0 auto}
+  .tp-dlabel{font-weight:700; font-size:13.5px; text-align:center; flex:1 1 auto}
+  .tp-badge{font-size:10px; font-weight:700; color:var(--accent); background:var(--accent-dim); border-radius:999px; padding:1px 7px; margin-left:6px}
+  .tp{max-height:420px; overflow-y:auto; border:1px solid var(--border); border-radius:10px}
+  .tp-row{display:grid; grid-template-columns:46px 1fr; min-height:26px}
+  .tp-row+.tp-row{border-top:1px solid var(--border)}
+  .tp-row.hr{border-top-color:var(--muted2)}
+  .tp-t{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:10px; color:var(--muted); text-align:right; padding:4px 6px; border-right:1px solid var(--border)}
+  .tp-t.half{opacity:.45}
+  .tp-slot{padding:2px 8px; display:flex; align-items:center; gap:6px; font-size:12.5px; min-width:0}
+  .tp-slot.free{color:var(--muted2); cursor:pointer}
+  .tp-slot.free:hover{background:var(--panel2); color:var(--text)}
+  .tp-slot.blk{cursor:pointer; font-weight:600; color:var(--text)}
+  .tp-slot.blk.cont{font-weight:400}
+  .tp-slot .lbl{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .k-arbeit{background:rgba(108,140,255,.22)}
+  .k-fokus{background:rgba(70,201,139,.20)}
+  .k-pause{background:rgba(245,165,36,.20)}
+  .k-sport{background:rgba(53,194,201,.22)}
+  .k-privat{background:rgba(183,140,255,.22)}
+  .k-sonst{background:rgba(154,163,178,.20)}
   /* 6-Wochen-Thema */
   .spr-stat{display:flex; gap:16px; flex-wrap:wrap; margin:8px 0}
   .spr-stat .n{font-size:20px; font-weight:750}
@@ -580,6 +622,7 @@ function seed(){
     _rev:0,
     chat:[],         // {role:'me'|'bot', text, ts}
     suggested:[],    // wish titles already suggested
+    planBlocks:[],   // {id,date,start,end,label,kind,updatedAt} 30-Min-Tagesplan je Tag
     savedReminders:[], // [{text, ts}] gespeicherte Lebens-Erinnerungen
     savedQuotes:[],  // [{t, a, ts}] gespeicherte Zitate
     goals:[],        // {id, title, cat:'privat'|'beruflich', keywords:[], checks:[{date,rating,note}], created}
@@ -1863,6 +1906,198 @@ function bindRoutineStrip(root){
   });
 }
 
+/* ===== 30-Minuten-Tagesplan (Zeitblöcke pro Tag) ===== */
+const PLAN_START_MIN=6*60, PLAN_END_MIN=22*60;   // 06:00–22:00
+const PLAN_KINDS=[
+  {k:"arbeit", label:"Arbeit", emoji:"💼"},
+  {k:"fokus",  label:"Fokus",  emoji:"🧠"},
+  {k:"sport",  label:"Sport",  emoji:"🏃"},
+  {k:"pause",  label:"Pause",  emoji:"🍽"},
+  {k:"privat", label:"Privat", emoji:"🏠"},
+  {k:"sonst",  label:"Sonstiges", emoji:"📌"},
+];
+function _m2hhmm(m){ return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0"); }
+function _hhmm2m(s){ const p=String(s||"0:0").split(":"); return (+p[0]||0)*60+(+p[1]||0); }
+function planSelDate(){ const d=S.ui&&S.ui.planDate; return (d&&/^\d{4}-\d{2}-\d{2}$/.test(d))?d:todayStr(); }
+function planBlocksFor(date){ return (S.planBlocks||[]).filter(b=>b.date===date).sort((a,b)=>_hhmm2m(a.start)-_hhmm2m(b.start)); }
+function planBlockAt(date, min){ return planBlocksFor(date).find(b=>_hhmm2m(b.start)<=min && min<_hhmm2m(b.end)); }
+function planDateLabel(date){
+  const dd=new Date(date+"T00:00:00"); const base=`${WD[dd.getDay()]}, ${dd.getDate()}.${dd.getMonth()+1}.`;
+  if(date===todayStr()) return base+` <span class="tp-badge">heute</span>`;
+  if(date===addDaysISO(todayStr(),1)) return base+` <span class="tp-badge">morgen</span>`;
+  return base;
+}
+function tagesplanBody(){
+  S.planBlocks=S.planBlocks||[];
+  const date=planSelDate();
+  let rows="";
+  for(let m=PLAN_START_MIN; m<PLAN_END_MIN; m+=30){
+    const b=planBlockAt(date,m); const hour=m%60===0;
+    let slot;
+    if(b){ const first=_hhmm2m(b.start)===m; const kind=PLAN_KINDS.find(x=>x.k===b.kind)||PLAN_KINDS[5];
+      slot=`<div class="tp-slot blk k-${kind.k} ${first?"":"cont"}" data-pb="${b.id}">${first?`<span>${kind.emoji}</span><span class="lbl">${esc(b.label||kind.label)}</span><span class="tiny muted" style="margin-left:auto">${b.start}–${b.end}</span>`:""}</div>`;
+    } else { slot=`<div class="tp-slot free" data-pslot="${_m2hhmm(m)}">${hour?"+":""}</div>`; }
+    rows+=`<div class="tp-row ${hour?"hr":""}"><div class="tp-t ${hour?"":"half"}">${_m2hhmm(m)}</div>${slot}</div>`;
+  }
+  return `<div class="tp-nav">
+      <button class="nb" data-pnav="-1" title="Tag zurück">‹</button>
+      <div class="tp-dlabel">${planDateLabel(date)}</div>
+      <button class="nb" data-pnav="1" title="Tag vor">›</button>
+    </div>
+    <div class="row" style="gap:6px; margin-bottom:8px">
+      <button class="btn ghost sm" data-pnav="today">Heute</button>
+      <button class="btn ghost sm" data-pnav="tomorrow">Morgen</button>
+    </div>
+    <div class="tp">${rows}</div>
+    <div class="tiny muted" style="margin-top:6px">Freies 30-Min-Fenster antippen zum Blocken · Block antippen zum Ändern</div>`;
+}
+function openPlanBlock(date, presetStart, id){
+  S.planBlocks=S.planBlocks||[];
+  const b = id ? S.planBlocks.find(x=>x.id===id) : null;
+  const startM = b ? _hhmm2m(b.start) : (presetStart!=null?presetStart:PLAN_START_MIN);
+  const endM = b ? _hhmm2m(b.end) : Math.min(PLAN_END_MIN, startM+60);
+  const timeOpts=(selM,fromM)=>{ let o=""; for(let m=PLAN_START_MIN; m<=PLAN_END_MIN; m+=30){ if(fromM!=null&&m<fromM) continue; o+=`<option value="${m}" ${m===selM?"selected":""}>${_m2hhmm(m)}</option>`; } return o; };
+  const todoTitles=[...new Set((S.todos||[]).filter(t=>todoOpen(t)).map(t=>t.title))].slice(0,80);
+  $("#modalTitle").textContent = b?"Block bearbeiten":"Zeit blocken";
+  $("#modalBody").innerHTML=`
+    <div class="field"><label>Was?</label>
+      <input id="pbLabel" list="pbTodos" value="${esc(b?(b.label||""):"")}" placeholder="z.B. Training, Fokus, Angebot"></div>
+    <datalist id="pbTodos">${todoTitles.map(t=>`<option value="${esc(t)}">`).join("")}</datalist>
+    <div class="grid2">
+      <div class="field"><label>Von</label><select id="pbStart">${timeOpts(startM,null)}</select></div>
+      <div class="field"><label>Bis</label><select id="pbEnd">${timeOpts(endM,startM+30)}</select></div>
+    </div>
+    <div class="field"><label>Kategorie</label><select id="pbKind">${PLAN_KINDS.map(k=>`<option value="${k.k}" ${ (b?b.kind===k.k:k.k==="arbeit")?"selected":""}>${k.emoji} ${k.label}</option>`).join("")}</select></div>
+    ${b?`<button class="btn danger" id="pbDel" style="width:100%; margin-top:4px">Block löschen</button>`:""}`;
+  const m=$("#modal"); m.classList.add("open"); $("#modalOk").textContent="Speichern";
+  const close=()=>{ closeModal(); $("#modalOk").textContent="OK"; };
+  const sEl=$("#pbStart"), eEl=$("#pbEnd");
+  if(sEl) sEl.onchange=()=>{ const sm=+sEl.value; const keep=Math.max(+eEl.value, sm+30); eEl.innerHTML=timeOpts(keep, sm+30); };
+  const saveB=()=>{
+    const sm=+$("#pbStart").value, em=+$("#pbEnd").value;
+    if(em<=sm){ toast("Ende muss nach Beginn liegen"); return; }
+    const label=$("#pbLabel").value.trim(); const kind=$("#pbKind").value;
+    if(b){ b.start=_m2hhmm(sm); b.end=_m2hhmm(em); b.label=label; b.kind=kind; b.updatedAt=Date.now(); }
+    else { S.planBlocks.push({id:uid(), date, start:_m2hhmm(sm), end:_m2hhmm(em), label, kind, updatedAt:Date.now()}); }
+    save(); render(); close(); toast("Gespeichert");
+  };
+  $("#modalOk").onclick=saveB;
+  $("#modalCancel").onclick=close; $("#modalX").onclick=close; m.onclick=e=>{ if(e.target.id==="modal") close(); };
+  const del=$("#pbDel"); if(del) del.onclick=()=>{ tombstone("planBlocks", b.id); S.planBlocks=S.planBlocks.filter(x=>x.id!==b.id); save(); render(); close(); toast("Block gelöscht"); };
+}
+function bindTagesplan(root){
+  root.querySelectorAll("[data-pnav]").forEach(bn=>bn.onclick=()=>{
+    S.ui=S.ui||{}; const v=bn.dataset.pnav; const cur=planSelDate();
+    if(v==="today") S.ui.planDate=todayStr();
+    else if(v==="tomorrow") S.ui.planDate=addDaysISO(todayStr(),1);
+    else S.ui.planDate=addDaysISO(cur, +v);
+    save(); render();
+  });
+  root.querySelectorAll("[data-pslot]").forEach(s=>s.onclick=()=>openPlanBlock(planSelDate(), _hhmm2m(s.dataset.pslot), null));
+  root.querySelectorAll("[data-pb]").forEach(bq=>bq.onclick=()=>openPlanBlock(planSelDate(), null, bq.dataset.pb));
+}
+
+/* ===== Bento-Widgets der Übersicht (zuklappbar, standardmäßig zu, verschiebbar) ===== */
+const OV_WIDGETS=["tagesplan","tagesziel","routinen","erinnerung","quickadd","tageboard"];
+const OV_WIDE=new Set(["tagesplan","tageboard"]);
+function ovOrder(){
+  let ord=((S.ui&&S.ui.ovWidgetOrder)||[]).filter(k=>OV_WIDGETS.includes(k));
+  OV_WIDGETS.forEach(k=>{ if(!ord.includes(k)) ord.push(k); });
+  return ord;
+}
+function ovIsOpen(id){ return !!(S.ui&&S.ui.ovOpen&&S.ui.ovOpen[id]); }   // Standard: zugeklappt
+function ovToggle(id){ S.ui=S.ui||{}; S.ui.ovOpen=S.ui.ovOpen||{}; S.ui.ovOpen[id]=!S.ui.ovOpen[id]; save(); render(); }
+function ovMove(id, dir){ const ord=ovOrder(); const i=ord.indexOf(id), j=i+dir; if(i<0||j<0||j>=ord.length) return; [ord[i],ord[j]]=[ord[j],ord[i]]; S.ui=S.ui||{}; S.ui.ovWidgetOrder=ord; save(); render(); }
+function renderBento(){
+  const date=planSelDate();
+  const doneToday=S.todos.filter(t=>todoDoneToday(t)).length;
+  const dgGoal=Math.max(1, Math.min(20, S.dayGoal||5));
+  const dgManual=(S.dayGoalManual && S.dayGoalManual.d===todayStr())?(S.dayGoalManual.n||0):0;
+  const dgFilled=Math.min(dgGoal, Math.max(doneToday, dgManual));
+  const mitDoneToday=S.todos.filter(t=>t.mit && todoDoneToday(t)).length;
+  const pinned=(S.routines||[]).filter(r=>r.overview);
+  const rlog=((S.routineLog||{})[todayStr()]||{}).done||{};
+  const rdone=pinned.filter(r=>rlog[r.id]===true).length;
+  const remOv=mindReminder(todayStr()); const owOv=ownWordsReminder(todayStr());
+  const savedNow=S.savedReminders.some(r=>r.text===remOv);
+  const W={};
+  W.tagesplan={ic:"🗓",name:"Tagesplan",sum:`${planBlocksFor(date).length} Blöcke · ${planDateLabel(date).replace(/<[^>]+>/g,"").trim()}`, body:tagesplanBody()};
+  W.tagesziel={ic:"🎯",name:"Tagesziel",sum:`${dgFilled}/${dgGoal} erledigt`, body:`
+    <div class="daygoal-dots">${Array.from({length:dgGoal},(_,i)=>{const on=i<dgFilled;return `<button class="daygoal-dot ${on?"on":""}" data-dg="${i+1}" title="${i+1}. To-do">${on?"●":"○"}</button>`;}).join("")}</div>
+    <div class="row center" style="justify-content:space-between; margin-top:10px; gap:8px">
+      <span class="tiny muted">${dgFilled>=dgGoal?"Geschafft! 🎉":`Noch ${dgGoal-dgFilled} bis zum Tagesziel`}</span>
+      <span class="row center" style="gap:6px"><span class="tiny muted">Ziel</span>
+        <button class="btn ghost sm" id="dgMinus" title="weniger">−</button><b style="min-width:18px; text-align:center">${dgGoal}</b>
+        <button class="btn ghost sm" id="dgPlus" title="mehr">＋</button></span>
+    </div>
+    ${mitDoneToday?`<div class="tiny" style="margin-top:8px; color:var(--warn)" title="Heute erledigte Most Important Tasks">${"★".repeat(mitDoneToday)} <span class="muted">${mitDoneToday} MIT heute erledigt</span></div>`:""}`};
+  W.routinen={ic:"🔁",name:"Routinen",sum: pinned.length?`${rdone}/${pinned.length} heute`:"keine verlinkt",
+    body: pinned.length?`<div class="rtn-chips">${pinned.map(r=>{const on=rlog[r.id]===true;return `<button class="rtn-chip ${on?"on":""}" data-rtn="${r.id}" title="${esc(r.name)} – abhaken"><span class="rc-box">${on?"✓":""}</span><span>${esc(r.icon||"•")}</span><span class="rc-name">${esc(r.name)}</span></button>`;}).join("")}</div>`
+      :`<div class="tiny muted">Noch keine Routine verlinkt. Im Routinen-Tab mit 📌 markieren – dann erscheint sie hier.</div>`};
+  W.erinnerung={ic:"✦",name:"Erinnerung",sum:trimWords(remOv,8), body:`
+    <div class="row" style="justify-content:space-between; align-items:flex-start; gap:8px">
+      <div class="grow">${esc(remOv)}</div>
+      <div class="row" style="gap:2px; flex:0 0 auto">
+        <button class="btn ghost" id="remNew" title="Neue Erinnerung" style="font-size:18px; padding:6px 8px; color:var(--muted)">🔄</button>
+        <button class="btn ghost" id="remSave" title="Erinnerung speichern" style="font-size:20px; padding:6px 8px; color:${savedNow?'var(--warn)':'var(--muted)'}">${savedNow?"★":"☆"}</button>
+      </div></div>
+    ${owOv?`<div class="tiny muted" style="margin-top:8px">Deine Worte (${fmtDate(owOv.date)}): „${esc(trimWords(owOv.a,18))}"</div>`:""}
+    ${S.savedReminders.length?`<button class="link" id="remToggle" style="margin-top:10px; display:inline-block">★ Gespeicherte (${S.savedReminders.length})</button>`:""}
+    ${S.ui&&S.ui.showSaved&&S.savedReminders.length?`<div style="margin-top:6px">${S.savedReminders.map((r,i)=>`<div class="row" style="gap:8px; align-items:flex-start; padding:8px 0; border-top:1px solid var(--border)"><div class="grow small">${esc(r.text)}<div class="tiny muted" style="margin-top:2px">${fmtDate(r.ts)}</div></div><button class="btn ghost sm" data-remdel="${i}" title="Entfernen">✕</button></div>`).join("")}</div>`:""}`};
+  W.quickadd={ic:"➕",name:"Neues To-do",sum:"schnell erfassen", body:`
+    <div class="field"><input id="qadd" placeholder="Titel…" autocomplete="off"></div>
+    <div class="grid2">
+      <div class="field"><label>Wichtigkeit</label><select id="qPrio"><option value="3">Hoch</option><option value="2" selected>Mittel</option><option value="1">Niedrig</option></select></div>
+      <div class="field"><label>Bereich</label><select id="qArea"><option value="">📥 Eingang</option>${S.areas.filter(x=>x.id!=="a_eingang").map(x=>`<option value="${x.id}">${esc(x.icon||"")} ${esc(x.name)}</option>`).join("")}</select></div>
+      <div class="field"><label>Projekt (optional)</label><input id="qProj" list="ovProjList" placeholder="Projekt (auch aus anderen Tabs)"><datalist id="ovProjList">${[...new Set(S.todos.filter(t=>t.project).map(t=>t.project).concat(S.areas.map(x=>x.name)))].sort().map(p=>`<option value="${esc(p)}">`).join("")}</datalist></div>
+      <div class="field"><label>Wiederholung</label><select id="qRepeat"><option value="">Keine</option><option value="week">Wöchentlich</option><option value="month">Monatlich</option><option value="quarter">Vierteljährlich</option><option value="year">Jährlich</option></select></div>
+      <div class="field"><label>Frist (erledigt bis)</label><input type="date" id="qdue"></div>
+      <div class="field"><label>Nachhaken am</label><input type="date" id="qFollow"></div>
+      <div class="field"><label>Tag (Tagesplan)</label><select id="qPlan">${planDayOptionsHTML()}</select></div>
+    </div>
+    <div class="field"><label>Notiz</label><textarea id="qNotes" placeholder="Notizen…"></textarea></div>
+    <button class="btn" id="qaddBtn" style="width:100%">To-do hinzufügen</button>
+    <div class="tiny muted" style="margin-top:8px">Ohne Bereich landet es im Eingang. Für Sprache/Freitext → Chat 💬</div>`};
+  W.tageboard={ic:"🗂",name:"To-dos auf Tage",sum:"Woche planen", body:planStripHTML()};
+  return `<div class="bento">`+ovOrder().map(id=>{
+    const w=W[id]; if(!w) return "";
+    const open=ovIsOpen(id);
+    return `<div class="widget ${OV_WIDE.has(id)?"wide":""} ${open?"open":""}" data-w="${id}">
+      <div class="w-head" data-whead="${id}">
+        <span class="w-grip" data-wgrip="${id}" title="Ziehen zum Verschieben">⠿</span>
+        <span class="w-ic">${w.ic}</span><span class="w-name">${esc(w.name)}</span>
+        <span class="w-sum">${open?"":esc(w.sum)}</span>
+        <span class="w-moves">
+          <button class="w-mv" data-wup="${id}" title="nach oben">▲</button>
+          <button class="w-mv" data-wdn="${id}" title="nach unten">▼</button>
+          <button class="w-chev" title="auf/zu">▸</button>
+        </span>
+      </div>
+      <div class="w-body">${open?w.body:""}</div>
+    </div>`;
+  }).join("")+`</div>`;
+}
+function bindBento(root){
+  root.querySelectorAll("[data-whead]").forEach(h=>{
+    h.onclick=(e)=>{ if(e.target.closest("[data-wup],[data-wdn],[data-wgrip]")) return; ovToggle(h.dataset.whead); };
+  });
+  root.querySelectorAll("[data-wup]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); ovMove(b.dataset.wup,-1); });
+  root.querySelectorAll("[data-wdn]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); ovMove(b.dataset.wdn,1); });
+  let dragId=null;
+  root.querySelectorAll(".widget").forEach(w=>{
+    const grip=w.querySelector("[data-wgrip]"); if(!grip) return;
+    const arm=()=>w.setAttribute("draggable","true");
+    grip.addEventListener("mousedown",arm);
+    grip.addEventListener("touchstart",arm,{passive:true});
+    w.addEventListener("dragstart",e=>{ dragId=w.dataset.w; try{ e.dataTransfer.setData("text/plain",dragId); e.dataTransfer.effectAllowed="move"; }catch(_){ } });
+    w.addEventListener("dragend",()=>{ w.setAttribute("draggable","false"); dragId=null; root.querySelectorAll(".widget.drop-before").forEach(x=>x.classList.remove("drop-before")); });
+    w.addEventListener("dragover",e=>{ e.preventDefault(); w.classList.add("drop-before"); });
+    w.addEventListener("dragleave",e=>{ if(e.target===w) w.classList.remove("drop-before"); });
+    w.addEventListener("drop",e=>{ e.preventDefault(); w.classList.remove("drop-before"); let src=dragId; try{ src=e.dataTransfer.getData("text/plain")||dragId; }catch(_){ } const dst=w.dataset.w;
+      if(src&&dst&&src!==dst){ const ord=ovOrder(); ord.splice(ord.indexOf(src),1); ord.splice(ord.indexOf(dst),0,src); S.ui=S.ui||{}; S.ui.ovWidgetOrder=ord; save(); render(); } });
+  });
+}
+
 /* ============================ VIEW: OVERVIEW ============================ */
 function viewOverview(){
   const open=S.todos.filter(t=>todoOpen(t));
@@ -1889,80 +2124,11 @@ function viewOverview(){
     </div>
     <div class="view-sub">${WD[new Date().getDay()]}, ${new Date().toLocaleDateString("de-DE")} · ${open.length} offen · ${(S.todos.filter(t=>todoDone(t)).length)?`<span class="donelink" data-jumpdone="overview">heute ${doneToday} erledigt ↓</span>`:`heute ${doneToday} erledigt`} ✓</div>
 
-    <div class="ov-top">
-    <div class="card">
-      <div class="row center" style="justify-content:space-between; gap:8px; cursor:pointer" id="dgHead">
-        <div class="row center" style="gap:8px"><b>🎯 Tagesziel</b><span class="tiny muted">${dgFilled}/${dgGoal} erledigt</span></div>
-        <button class="btn ghost sm" id="dgToggle">${dgCollapsed?"▾ ausklappen":"▴ einklappen"}</button>
-      </div>
-      <div id="dgBody" style="${dgCollapsed?"display:none":"margin-top:10px"}">
-        <div class="daygoal-dots">${Array.from({length:dgGoal},(_,i)=>{const on=i<dgFilled;return `<button class="daygoal-dot ${on?"on":""}" data-dg="${i+1}" title="${i+1}. To-do">${on?"●":"○"}</button>`;}).join("")}</div>
-        <div class="row center" style="justify-content:space-between; margin-top:10px; gap:8px">
-          <span class="tiny muted">${dgFilled>=dgGoal?"Geschafft! 🎉":`Noch ${dgGoal-dgFilled} bis zum Tagesziel`}</span>
-          <span class="row center" style="gap:6px">
-            <span class="tiny muted">Ziel</span>
-            <button class="btn ghost sm" id="dgMinus" title="weniger">−</button>
-            <b style="min-width:18px; text-align:center">${dgGoal}</b>
-            <button class="btn ghost sm" id="dgPlus" title="mehr">＋</button>
-          </span>
-        </div>
-        ${mitDoneToday?`<div class="tiny" style="margin-top:8px; color:var(--warn)" title="Heute erledigte Most Important Tasks">${"★".repeat(mitDoneToday)} <span class="muted">${mitDoneToday} MIT heute erledigt</span></div>`:""}
-      </div>
-    </div>
+    ${renderBento()}
 
-    <div class="card" style="border-color:var(--accent-dim)">
-      <div class="row" style="justify-content:space-between; align-items:flex-start; gap:8px">
-        <div class="grow">
-          <div class="small" style="font-weight:600; margin-bottom:4px">✦ Erinnerung fürs Leben</div>
-          <div>${esc(remOv)}</div>
-        </div>
-        <div class="row" style="gap:2px; flex:0 0 auto">
-          <button class="btn ghost" id="remNew" title="Neue Erinnerung für heute" style="font-size:18px; padding:6px 8px; color:var(--muted)">🔄</button>
-          <button class="btn ghost" id="remSave" title="Erinnerung speichern" style="font-size:20px; padding:6px 8px; color:${savedNow?'var(--warn)':'var(--muted)'}">${savedNow?"★":"☆"}</button>
-        </div>
-      </div>
-      ${owOv?`<div class="tiny muted" style="margin-top:8px">Deine Worte (${fmtDate(owOv.date)}): „${esc(trimWords(owOv.a,18))}"</div>`:""}
-      ${S.savedReminders.length?`<button class="link" id="remToggle" style="margin-top:10px; display:inline-block">★ Gespeicherte (${S.savedReminders.length})</button>`:""}
-      ${S.ui.showSaved&&S.savedReminders.length?`<div style="margin-top:6px">${S.savedReminders.map((r,i)=>`
-        <div class="row" style="gap:8px; align-items:flex-start; padding:8px 0; border-top:1px solid var(--border)">
-          <div class="grow small">${esc(r.text)}<div class="tiny muted" style="margin-top:2px">${fmtDate(r.ts)}</div></div>
-          <button class="btn ghost sm" data-remdel="${i}" title="Entfernen">✕</button>
-        </div>`).join("")}</div>`:""}
-    </div>
+    ${sprintCardHTML()}
 
-    <div class="card">
-      <div class="row center" style="justify-content:space-between; gap:8px; cursor:pointer" id="qHead">
-        <h3 style="margin:0">Neues To-do</h3>
-        <button class="btn ghost sm" id="qToggle">${qCollapsed?"▾ ausklappen":"▴ einklappen"}</button>
-      </div>
-      <div id="qBody" style="${qCollapsed?"display:none":"margin-top:10px"}">
-        <div class="field"><input id="qadd" placeholder="Titel…" autocomplete="off"></div>
-        <div class="grid2">
-          <div class="field"><label>Wichtigkeit</label>
-            <select id="qPrio"><option value="3">Hoch</option><option value="2" selected>Mittel</option><option value="1">Niedrig</option></select></div>
-          <div class="field"><label>Bereich</label>
-            <select id="qArea"><option value="">📥 Eingang</option>${S.areas.filter(x=>x.id!=="a_eingang").map(x=>`<option value="${x.id}">${esc(x.icon||"")} ${esc(x.name)}</option>`).join("")}</select></div>
-          <div class="field"><label>Projekt (optional)</label>
-            <input id="qProj" list="ovProjList" placeholder="Projekt (auch aus anderen Tabs)">
-            <datalist id="ovProjList">${[...new Set(S.todos.filter(t=>t.project).map(t=>t.project).concat(S.areas.map(x=>x.name)))].sort().map(p=>`<option value="${esc(p)}">`).join("")}</datalist></div>
-          <div class="field"><label>Wiederholung</label>
-            <select id="qRepeat"><option value="">Keine</option><option value="week">Wöchentlich</option><option value="month">Monatlich</option><option value="quarter">Vierteljährlich</option><option value="year">Jährlich</option></select></div>
-          <div class="field"><label>Frist (erledigt bis)</label><input type="date" id="qdue"></div>
-          <div class="field"><label>Nachhaken am</label><input type="date" id="qFollow"></div>
-          <div class="field"><label>Tag (Tagesplan)</label><select id="qPlan">${planDayOptionsHTML()}</select></div>
-        </div>
-        <div class="field"><label>Notiz</label><textarea id="qNotes" placeholder="Notizen…"></textarea></div>
-        <button class="btn" id="qaddBtn" style="width:100%">To-do hinzufügen</button>
-        <div class="tiny muted" style="margin-top:8px">Ohne Bereich landet es im Eingang. Für Sprache/Freitext → Chat 💬</div>
-      </div>
-    </div>
-    </div>
-
-    <div class="spr-row">${sprintCardHTML()}${routineStripHTML()}</div>
-
-    ${mitStripHTML()}
-
-    ${planStripHTML()}`;
+    ${mitStripHTML()}`;
 
   // Zeit-Abschnitte: Heute · Morgen · Ab Übermorgen (überfällige zählen zu „Heute")
   const openAll=S.todos.filter(t=>todoOpen(t));
@@ -1987,12 +2153,12 @@ function viewOverview(){
   });
   html+=donePanel(S.todos.filter(t=>todoDone(t)), "overview", true);
 
-  const v=$("#view"); v.innerHTML=html; bindTodos(v); bindDone(v); bindSprint(v); bindMit(v); bindPlan(v); bindRoutineStrip(v);
-  $("#ovBoardToggle").onclick=()=>{ S.ui.ovBoard=!S.ui.ovBoard; save(); render(); };
+  const v=$("#view"); v.innerHTML=html;
+  bindTodos(v); bindDone(v); bindSprint(v); bindMit(v);
+  bindBento(v); bindTagesplan(v); bindRoutineStrip(v); bindPlan(v);
+  if(ovBoard) bindBoard(v);
+  const ob=$("#ovBoardToggle"); if(ob) ob.onclick=()=>{ S.ui.ovBoard=!S.ui.ovBoard; save(); render(); };
   // Tagesziel
-  const dgToggleFn=()=>{ S.ui.dayGoalCollapsed=!S.ui.dayGoalCollapsed; save(); render(); };
-  const dgh=$("#dgHead"); if(dgh) dgh.onclick=(e)=>{ if(e.target.closest("button")&&e.target.id!=="dgToggle") return; dgToggleFn(); };
-  const dgt=$("#dgToggle"); if(dgt) dgt.onclick=(e)=>{ e.stopPropagation(); dgToggleFn(); };
   const dgm=$("#dgMinus"); if(dgm) dgm.onclick=(e)=>{ e.stopPropagation(); S.dayGoal=Math.max(1,(S.dayGoal||5)-1); save(); render(); };
   const dgp=$("#dgPlus"); if(dgp) dgp.onclick=(e)=>{ e.stopPropagation(); S.dayGoal=Math.min(20,(S.dayGoal||5)+1); save(); render(); };
   v.querySelectorAll("[data-dg]").forEach(b=>b.onclick=()=>{
@@ -2001,20 +2167,17 @@ function viewOverview(){
     S.dayGoalManual={d:todayStr(), n:Math.max(0,manual)};
     save(); render();
   });
-  if(ovBoard) bindBoard(v);
-  const qToggleFn=()=>{ S.ui.qaddCollapsed=!S.ui.qaddCollapsed; save(); render(); };
-  const qh=$("#qHead"); if(qh) qh.onclick=(e)=>{ if(e.target.closest("button")&&e.target.id!=="qToggle") return; qToggleFn(); };
-  const qt=$("#qToggle"); if(qt) qt.onclick=(e)=>{ e.stopPropagation(); qToggleFn(); };
+  // Neues To-do (nur gebunden, wenn Kachel offen)
   const q=$("#qadd"), qb=$("#qaddBtn");
-  const doQ=()=>{ const val=q.value.trim(); if(!val) return;
+  const doQ=()=>{ if(!q) return; const val=q.value.trim(); if(!val) return;
     const areaId=($("#qArea")&&$("#qArea").value) ? $("#qArea").value : ensureInbox().id;
     addTodo({title:val, priority:+($("#qPrio")&&$("#qPrio").value)||2, areaId,
       project:($("#qProj")?$("#qProj").value.trim():""),
-      dueDate:$("#qdue").value||null, followUpDate:($("#qFollow")?$("#qFollow").value||null:null),
+      dueDate:($("#qdue")?$("#qdue").value||null:null), followUpDate:($("#qFollow")?$("#qFollow").value||null:null),
       notes:($("#qNotes")?$("#qNotes").value.trim():""), repeat:presetToRepeat($("#qRepeat")?$("#qRepeat").value:""),
       planDay:($("#qPlan")?$("#qPlan").value||null:null)});
     q.value=""; toast("To-do angelegt"); render(); };
-  qb.onclick=doQ; q.onkeydown=e=>{ if(e.key==="Enter") doQ(); };
+  if(qb) qb.onclick=doQ; if(q) q.onkeydown=e=>{ if(e.key==="Enter") doQ(); };
   const rn=$("#remNew"); if(rn) rn.onclick=rerollReminder;
   const rs=$("#remSave"); if(rs) rs.onclick=()=>{
     if(S.savedReminders.some(r=>r.text===remOv)){ S.savedReminders=S.savedReminders.filter(r=>r.text!==remOv); toast("Entfernt"); }
@@ -4068,7 +4231,7 @@ function stateWeight(s){ if(!s) return 0; return (s.todos?s.todos.length:0)+(s.g
 
 /* ---- Zusammenführung (Merge) auf Eintrags-Ebene ---- */
 const LIST_COLLS=["todos","goals","bookmarks","ideas","wishes","thoughts","relationship","myThoughts","areas","routines","players","lessons","sprints",
-  "intake","alive","adventures","builds","sortPairs"];
+  "intake","alive","adventures","builds","sortPairs","planBlocks"];
 const MAP_COLLS=["mindAnswers","mindDayQ","mindDayR","mindDayQuote","valuesDayQ","valuesAns","dayGoalLog","weekly","monthly","lifeMorning"];
 function _itemTime(it){ return (it&&(it.updatedAt||0))||0; }
 function mergeList(localArr, remoteArr, localTomb, remoteTomb, tombAcc){
@@ -4352,7 +4515,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-11-04.42";
+const APP_VERSION="2026-11-04.43";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
