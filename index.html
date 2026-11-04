@@ -737,9 +737,26 @@ function save(){
     clearTimeout(_pushTimer); _pushTimer=setTimeout(()=>{ syncPush().catch(()=>{}); }, 2000);
   }
 }
+/* ===== Täglicher Kompass (Erinnerungen an sich selbst, Bereich Leben) ===== */
+const COMPASS_SEED=[
+  {title:"Das Leben findet jetzt statt.", text:"Ich muss nicht erst alles erledigen, um mein Leben genießen zu dürfen."},
+  {title:"Nimm dich selbst nicht zu ernst.", text:"Lache mehr. Sei ein bisschen weird. Mach verrückte Dinge."},
+  {title:"Du bist mehr als deine Arbeit.", text:"Dein Wert hängt nicht von deinem Unternehmen, deinem Geld oder deiner Produktivität ab."},
+  {title:"Mehr gestalten. Weniger verwalten.", text:"Nutze deine Kreativität. Entwickle Ideen. Erschaffe Dinge. Gib langweilige Aufgaben ab."},
+  {title:"Folge deiner Neugier.", text:"Nicht alles muss sinnvoll, produktiv oder profitabel sein. Manches darf einfach Spaß machen."},
+  {title:"Wähle Freiheit statt permanenter Kontrolle.", text:"Vereinfache. Delegiere. Eliminiere. Lass Dinge auch einmal liegen."},
+  {title:"Wage dich aus deiner Komfortzone.", text:"Erlebe Dinge, die dich überraschen. Entdecke, wer du außerhalb deiner gewohnten Rollen bist."},
+  {title:"Deine Energie ist wichtig.", text:"Achte darauf, was dich lebendig macht. Freude ist kein Bonus, sondern Teil deines Lebens."},
+  {title:"Halte Platz für Spontanität.", text:"Nicht alles planen. Manchmal einfach machen, worauf du Lust hast."},
+  {title:"Du darfst ein schönes Leben führen, ohne es dir verdienen zu müssen.", text:"Nicht irgendwann. Nicht erst nach dem nächsten Erfolg. Jetzt."},
+];
+const COMPASS_LEITIDEE_SEED="Weniger funktionieren. Mehr leben.\nMehr Freiheit. Mehr Neugier. Mehr Leichtigkeit. Mehr Freude.";
+function compassList(){ return (S.compassReminders||[]).slice().sort((a,b)=>(a.pos||0)-(b.pos||0)); }
+function compassOfDay(){ const list=compassList(); if(!list.length) return null; const dn=Math.floor(Date.parse(todayStr()+"T00:00:00")/86400000); return list[((dn%list.length)+list.length)%list.length]; }
+
 function ensureState(){
   const defs={ mindAnswers:{}, mindDayQ:{}, mindDayR:{}, mindDayQuote:{}, mindAskedQ:[], mindAskedR:[],
-    mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{},
+    mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{}, compassReminders:[], compassLeitidee:"",
     savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], relationship:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[], tabLabels:{}, dayGoalLog:{}, players:[], lessons:[], sprints:[],
     /* Bereich Leben (Life OS) – neue Sammlungen, alle synchronisiert */
     intake:[],        // Eingang: {id,text,ts,status:'open'|'filed'|'kept',target,targetId,updatedAt}
@@ -758,6 +775,11 @@ function ensureState(){
   if(S.dayGoal==null) S.dayGoal=5;
   // Einmalig: Orthomol-Routine anlegen und auf der Übersicht anzeigen
   if(!S.orthomolSeeded){ if(!S.routines.some(r=>r.id==="r_orthomol")) S.routines.push({id:"r_orthomol", name:"Orthomol genommen", icon:"💊", overview:true, updatedAt:Date.now()}); S.orthomolSeeded=true; }
+  // Einmalig: täglichen Kompass mit den 10 Erinnerungen + Leitidee anlegen (danach frei editierbar/löschbar)
+  if(!S.compassSeeded){ S.compassReminders=S.compassReminders||[];
+    if(!S.compassReminders.length){ COMPASS_SEED.forEach((c,i)=>S.compassReminders.push({id:"cmp_"+(i+1), pos:i+1, title:c.title, text:c.text, updatedAt:Date.now()})); }
+    if(!S.compassLeitidee) S.compassLeitidee=COMPASS_LEITIDEE_SEED;
+    S.compassSeeded=true; }
   for(const k in defs){ if(S[k]==null) S[k]=defs[k]; }
   if(S._rev==null) S._rev=0;
   if(!S.startDate) S.startDate=todayStr();
@@ -3182,6 +3204,17 @@ function viewToday(){
     </div>`;
   }
 
+  // Täglicher Kompass – eine Erinnerung an mich selbst (rotiert täglich)
+  const cd=compassOfDay();
+  if(cd){
+    html+=`<div class="life-card" data-go="guide" style="cursor:pointer; border-color:var(--accent-dim)">
+      <h3>🧭 Kompass</h3>
+      <div class="life-q" style="font-size:18px">${esc(cd.title)}</div>
+      ${cd.text?`<div class="muted" style="margin-top:4px">${esc(cd.text)}</div>`:""}
+      ${S.compassLeitidee?`<div class="tiny muted" style="margin-top:12px; white-space:pre-line; border-top:1px solid var(--border); padding-top:8px">${esc(S.compassLeitidee)}</div>`:""}
+      <div class="tiny" style="margin-top:8px; color:var(--accent)">Alle ${compassList().length} Erinnerungen ansehen →</div>
+    </div>`;
+  }
   // Nächstes Erlebnis
   if(lifeUnlocked("adventures")){
     const nx=nextAdventure();
@@ -3973,6 +4006,20 @@ function viewGuide(){
       <h3>Mein Leitbild</h3>
       <textarea id="creedText" placeholder="In ein, zwei Sätzen: Wofür stehst du? Wie willst du leben?" style="min-height:72px">${esc(S.creed||"")}</textarea>
       <button class="btn" id="creedSave" style="width:100%; margin-top:8px">Speichern</button>
+    </div>
+    <div class="card" style="border-color:var(--accent-dim)">
+      <h3>🧭 Täglicher Kompass</h3>
+      <div class="muted small" style="margin-bottom:4px">Deine Erinnerungen an dich selbst – jeden Tag erscheint eine davon im „Heute".</div>
+      ${compassList().map(c=>`<div class="row" style="gap:10px; align-items:flex-start; padding:9px 0; border-top:1px solid var(--border)" data-cmp="${c.id}">
+          <div class="grow" style="min-width:0"><b>${esc(c.title)}</b>${c.text?`<div class="muted small" style="margin-top:2px">${esc(c.text)}</div>`:""}</div>
+          <div class="row" style="gap:2px; flex:0 0 auto"><button class="btn ghost sm" data-cmpedit="${c.id}" title="Bearbeiten">✏️</button><button class="btn ghost sm" data-cmpdel="${c.id}" title="Löschen">✕</button></div>
+        </div>`).join("")}
+      <button class="btn sec sm" id="cmpAdd" style="width:100%; margin-top:10px">＋ Erinnerung</button>
+      <div style="margin-top:14px">
+        <div class="tiny muted" style="margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px">Meine Leitidee</div>
+        <textarea id="cmpLeit" placeholder="Deine Leitidee in ein paar Worten …" style="min-height:70px">${esc(S.compassLeitidee||"")}</textarea>
+        <button class="btn" id="cmpLeitSave" style="width:100%; margin-top:8px">Leitidee speichern</button>
+      </div>
     </div>`;
 
   const valsInner = vals.length
@@ -3996,6 +4043,13 @@ function viewGuide(){
 
   const v=$("#view"); v.innerHTML=html;
   $("#creedSave").onclick=()=>{ S.creed=$("#creedText").value.trim(); save(); toast("Leitbild gespeichert 🧭"); };
+  v.querySelectorAll("[data-cmpedit]").forEach(b=>b.onclick=async()=>{ const c=(S.compassReminders||[]).find(x=>x.id===b.dataset.cmpedit); if(!c) return;
+    const r=await uiPrompt("Erinnerung bearbeiten",[{key:"title",label:"Titel",value:c.title},{key:"text",label:"Text",value:c.text||""}]); if(!r) return;
+    if(r.title) c.title=r.title; c.text=r.text||""; c.updatedAt=Date.now(); save(); render(); toast("Gespeichert"); });
+  v.querySelectorAll("[data-cmpdel]").forEach(b=>b.onclick=()=>{ uiConfirm("Diese Erinnerung löschen?","Löschen").then(ok=>{ if(ok){ const id=b.dataset.cmpdel; tombstone("compassReminders",id); S.compassReminders=(S.compassReminders||[]).filter(x=>x.id!==id); save(); render(); } }); });
+  const cmpA=$("#cmpAdd"); if(cmpA) cmpA.onclick=async()=>{ const r=await uiPrompt("Neue Erinnerung",[{key:"title",label:"Titel",value:""},{key:"text",label:"Text (optional)",value:""}],"Anlegen"); if(!r||!r.title) return;
+    const mx=Math.max(0,...compassList().map(c=>c.pos||0)); (S.compassReminders=S.compassReminders||[]).push({id:"cmp_"+uid(), pos:mx+1, title:r.title, text:r.text||"", updatedAt:Date.now()}); save(); render(); toast("Hinzugefügt"); };
+  const cmpL=$("#cmpLeitSave"); if(cmpL) cmpL.onclick=()=>{ S.compassLeitidee=$("#cmpLeit").value.trim(); save(); toast("Leitidee gespeichert 🧭"); };
   $("#guideExport").onclick=()=>{ try{ const blob=new Blob([guideText()],{type:"text/plain"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="mein-lebensleitfaden.txt"; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},200);}catch(e){toast("Export fehlgeschlagen");} };
 }
 
@@ -4244,7 +4298,7 @@ function stateWeight(s){ if(!s) return 0; return (s.todos?s.todos.length:0)+(s.g
 
 /* ---- Zusammenführung (Merge) auf Eintrags-Ebene ---- */
 const LIST_COLLS=["todos","goals","bookmarks","ideas","wishes","thoughts","relationship","myThoughts","areas","routines","players","lessons","sprints",
-  "intake","alive","adventures","builds","sortPairs","planBlocks"];
+  "intake","alive","adventures","builds","sortPairs","planBlocks","compassReminders"];
 const MAP_COLLS=["mindAnswers","mindDayQ","mindDayR","mindDayQuote","valuesDayQ","valuesAns","dayGoalLog","weekly","monthly","lifeMorning"];
 function _itemTime(it){ return (it&&(it.updatedAt||0))||0; }
 function mergeList(localArr, remoteArr, localTomb, remoteTomb, tombAcc){
@@ -4528,7 +4582,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-11-04.44";
+const APP_VERSION="2026-11-04.45";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
