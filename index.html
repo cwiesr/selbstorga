@@ -9,6 +9,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Selbstorga" />
 <link rel="manifest" href="./manifest.webmanifest" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Nunito:wght@400;600;700&display=swap">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236c8cff'/%3E%3Ctext x='32' y='45' font-size='38' text-anchor='middle' font-family='Arial'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E" />
 <title>Selbstorga – Leben & Arbeit</title>
 <style>
@@ -41,10 +44,50 @@
     display:grid;place-items:center;color:#fff;font-size:16px}
   .brand small{font-weight:500; color:var(--muted); font-size:12px}
 
-  /* Bereich Leben: ruhigere Farbwelt, kein Blau der Arbeitswelt */
-  body.life{--accent:#46c98b; --accent-dim:#1f3a2f}
-  body.life .topbar{border-bottom-color:#1f3a2f}
-  body.life .brand .logo{background:#46c98b; color:#04231b}
+  /* Bereich Leben – Design "Morgenlicht": warmes Papier, Serife für Fragen, Aprikose als einziger Akzent.
+     Arbeit bleibt dunkel, damit man auf einen Blick weiß, in welcher Welt man ist. */
+  body.life{--bg:#f6efe3; --panel:#fbf6ee; --panel2:#f1e8d9; --border:#e6d9c6; --text:#2b2520; --muted:#7a6a5c; --muted2:#a08a74;
+    --accent:#e8975a; --accent-dim:#f6d9bf; --good:#5f8f6a; --warn:#c0662f; --bad:#b8524a; --radius:22px;
+    font-family:'Nunito',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text)}
+  body.life::before{content:""; position:fixed; top:-120px; right:-90px; width:300px; height:300px; border-radius:50%; background:#f2c7a2; opacity:.55; pointer-events:none; z-index:0}
+  body.life header.topbar{background:rgba(246,239,227,.92); border-bottom:none}
+  body.life .brand .logo{background:#e8975a; color:#2b2520}
+  body.life .brand small{font-family:'Fraunces',Georgia,serif; font-weight:500}
+  body.life main{position:relative; z-index:1; padding-bottom:110px}
+  body.life .tabbar{display:none}
+  body.life .view-title{font-family:'Fraunces',Georgia,serif; font-weight:400; font-size:30px; letter-spacing:0}
+  body.life .life-q{font-family:'Fraunces',Georgia,serif; font-weight:400; font-size:26px; line-height:1.18}
+  body.life .life-card{border:none; box-shadow:0 1px 0 #e6d9c6; padding:18px}
+  body.life .life-card h3{color:#a08a74; font-weight:700; font-size:11px; letter-spacing:.06em}
+  body.life .card{border:none; box-shadow:0 1px 0 #e6d9c6}
+  body.life .card h3{color:#a08a74}
+  body.life .countdown{font-family:'Fraunces',Georgia,serif; font-weight:400; font-size:44px; color:#c0662f}
+  body.life .btn{background:#e8975a; color:#2b2520; border-radius:14px}
+  body.life .btn.sec{background:transparent; border:1.5px solid #d9b893; color:#7a6a5c}
+  body.life .btn.ghost{background:transparent; color:#8a4b1f}
+  body.life .btn.danger{color:#b8524a; border-color:#e6d9c6}
+  body.life .modebtn{background:#fbf6ee; border:1.5px solid #d9b893; color:#8a4b1f; border-radius:999px}
+  body.life input, body.life select, body.life textarea{background:#fff; border-color:#e6d9c6; border-radius:14px}
+  body.life input:focus, body.life textarea:focus{border-color:#e8975a}
+  body.life .yesno button{background:transparent; border:1.5px solid #d9b893; color:#7a6a5c; border-radius:14px}
+  body.life .yesno button:first-child{background:#2b2520; border-color:#2b2520; color:#f6efe3}
+  body.life .tri button{background:transparent; border:1.5px solid #e6d9c6; color:#a08a74; border-radius:999px}
+  body.life .tri button.on{background:#f6d9bf; border-color:#e8975a; color:#2b2520}
+  body.life .propose{border:1.5px solid #e8975a; background:#fbf1e6}
+  body.life .link{color:#8a4b1f}
+  body.life .proj-head{color:#a08a74}
+  body.life .life-sub{font-family:'Fraunces',Georgia,serif; font-style:italic; color:#8a7867; font-size:15px}
+  body.life .catchip{background:#fbf6ee; border-color:#e6d9c6; color:#7a6a5c}
+  body.life .catchip.on{background:#2b2520; border-color:#2b2520; color:#f6efe3}
+  body.life .check{border-color:#d9b893}
+  body.life .toast{background:#2b2520; color:#f6efe3; border-color:#2b2520}
+  /* Tableiste des Lebens: unten, Icons mit Beschriftung */
+  .lifenav{display:none; position:fixed; left:0; right:0; bottom:0; z-index:35; background:rgba(246,239,227,.96); backdrop-filter:blur(8px);
+    border-top:1px solid #e6d9c6; padding:8px 10px calc(14px + env(safe-area-inset-bottom)); justify-content:space-around}
+  body.life .lifenav{display:flex}
+  .lifenav button{flex:1 1 0; display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 2px; color:#a08a74; font-size:11px; font-weight:700; min-height:var(--tap); border-radius:12px}
+  .lifenav button.active{color:#c0662f}
+  .lifenav svg{width:22px; height:22px}
   .modebtn{background:var(--panel2); border:1px solid var(--border); color:var(--text); font-weight:600}
   .life-q{font-size:21px; font-weight:700; line-height:1.3; margin:4px 0 12px}
   .life-card{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px}
@@ -396,6 +439,8 @@
 </header>
 
 <main id="view"></main>
+
+<nav class="lifenav" id="lifenav" aria-label="Bereich Leben"></nav>
 
 <button class="fab" id="fab" aria-label="Chat">💬</button>
 
@@ -932,11 +977,20 @@ const SPECIALS_RIGHT=[
 const LIFE_TABS=[
   {k:"today",      icon:"🌿", name:"Heute"},
   {k:"intake",     icon:"✍️", name:"Eingang"},
-  {k:"wishes",     icon:"🌟", name:"100 Things"},
   {k:"adventures", icon:"🧭", name:"Erlebnisse"},
+  {k:"wishes",     icon:"🌟", name:"100 Things"},
   {k:"alive",      icon:"✨", name:"Alive"},
   {k:"more",       icon:"⋯",  name:"Mehr"},
 ];
+const LIFE_SVG={
+  today:'<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
+  intake:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  adventures:'<circle cx="12" cy="12" r="10"/><path d="m16 8-3 8-5-3 8-5Z"/>',
+  wishes:'<path d="m12 3 2.7 5.6 6.3.9-4.5 4.4 1 6.1L12 17l-5.5 3 1-6.1L3 9.5l6.3-.9Z"/>',
+  alive:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
+  more:'<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
+};
+function lifeIcon(k){ return `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${LIFE_SVG[k]||LIFE_SVG.more}</svg>`; }
 const LIFE_LEGACY=[
   {k:"mind",     icon:"🧠", name:"Mind", sub:"Zitat, Frage des Tages, eigene Gedanken"},
   {k:"routines", icon:"🔁", name:"Routinen", sub:"Tages-Checks und Gefühls-Check"},
@@ -994,6 +1048,7 @@ function renderModeUI(){
   const fab=$("#fab"); if(fab) fab.style.display = life ? "none" : "";
   const br=$("#brandMode"); if(br) br.textContent = life ? "Leben" : "Arbeit";
   document.body.classList.toggle("life", life);
+  const tc=document.querySelector('meta[name="theme-color"]'); if(tc) tc.setAttribute("content", life?"#f6efe3":"#0f1115");
 }
 function currentTabOrder(){
   const defaults=[...SPECIALS_LEFT.map(s=>s.k), ...S.areas.map(a=>"area:"+a.id), ...SPECIALS_RIGHT.map(s=>s.k)];
@@ -1008,7 +1063,8 @@ function moveTab(key, dir){
   const j=dir==="left"?i-1:i+1; if(j<0||j>=order.length) return;
   [order[i],order[j]]=[order[j],order[i]]; save(); renderTabs();
 }
-function renderLifeTabs(bar){
+function renderLifeTabs(){
+  const nav=$("#lifenav"); if(!nav) return; nav.innerHTML="";
   const act=S.ui.active;
   LIFE_TABS.forEach(t=>{
     if(t.k==="adventures"&&!lifeUnlocked("adventures")) return;
@@ -1016,16 +1072,17 @@ function renderLifeTabs(bar){
     if(t.k==="more"&&!lifeUnlocked("more")) return;
     const b=document.createElement("button");
     const active = act===t.k || (t.k==="more" && LIFE_LEGACY.some(l=>l.k===act)) || (t.k==="today" && (act==="weekly"||act==="monthly"));
-    b.className="tab "+(active?"active":"");
-    b.innerHTML=`${t.icon} ${esc(tabName(t.k))}`;
+    b.className=active?"active":"";
+    b.innerHTML=lifeIcon(t.k)+`<span>${esc(tabName(t.k))}</span>`;
     b.onclick=()=>go(t.k);
-    bar.appendChild(b);
+    nav.appendChild(b);
   });
 }
 function renderTabs(){
   renderModeUI();
   const bar=$("#tabbar"); const sl=bar.scrollLeft; bar.innerHTML="";
-  if(inLife()){ renderLifeTabs(bar); bar.scrollLeft=sl; return; }
+  if(inLife()){ renderLifeTabs(); return; }
+  const ln=$("#lifenav"); if(ln) ln.innerHTML="";
   const order=currentTabOrder(); const edit=!!S.ui.editTabs;
   order.forEach((k,idx)=>{
     const meta=tabMeta(k); if(!meta) return;
@@ -4295,7 +4352,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-11-04.41";
+const APP_VERSION="2026-11-04.42";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
