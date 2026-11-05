@@ -1878,12 +1878,13 @@ function planChip(t){
   return `<div class="plan-chip" draggable="true" data-planchip="${t.id}">
     <button class="check sm ${todoDone(t)?"on":""}" data-plantoggle="${t.id}" title="Erledigt">${todoDone(t)?"✓":""}</button>
     <span class="grow mtitle" data-planopen="${t.id}" style="min-width:0">${esc(t.title)}</span>
+    <button class="btn ghost sm" data-planpick="${t.id}" title="Tag wählen (Fr/Sa/Mo …)">🗓</button>
     <button class="btn ghost sm" data-planremove="${t.id}" title="Aus Tagesplan entfernen">✕</button>
   </div>`;
 }
 function planStripHTML(){
   const days=planDays();
-  let h=`<div class="plan-wrap"><div class="plan-head-row">🗓 Tagesplan <span class="tiny muted" style="font-weight:400">— To-dos per Hand auf die Tage ziehen (bleiben zusätzlich in der Prio-Liste)</span></div><div class="plan-board">`;
+  let h=`<div class="plan-wrap"><div class="plan-head-row">🗓 Tagesplan <span class="tiny muted" style="font-weight:400">— beim To-do auf 🗓 tippen und einen Tag wählen (oder ziehen) · bleiben zusätzlich in der Prio-Liste</span></div><div class="plan-board">`;
   days.forEach((d,i)=>{
     const dd=new Date(d+"T00:00:00");
     // Heute-Spalte (i===0): auch überfällige offene Plan-To-dos (planDay<=heute) – rein in der Anzeige.
@@ -1922,10 +1923,12 @@ function bindPlan(root){
   root.querySelectorAll(".plan-col").forEach(col=>{
     col.addEventListener("dragover", e=>{ e.preventDefault(); try{ e.dataTransfer.dropEffect="move"; }catch(_){} col.classList.add("dragover"); });
     col.addEventListener("dragleave", e=>{ if(e.target===col) col.classList.remove("dragover"); });
-    col.addEventListener("drop", e=>{ e.preventDefault(); col.classList.remove("dragover"); let id=dragId; try{ id=e.dataTransfer.getData("text/plain")||dragId; }catch(_){}
+    col.addEventListener("drop", e=>{ e.preventDefault(); col.classList.remove("dragover"); let id=""; try{ id=e.dataTransfer.getData("text/plain")||""; }catch(_){}
+      if(!id || !S.todos.find(x=>x.id===id)) id=dragId;   // Fallback: eigene Chip-ID, falls Drag-Daten überschrieben wurden
       if(id){ const t=S.todos.find(x=>x.id===id); if(t){ t.planDay=col.dataset.planday; t.updatedAt=Date.now(); save(); render(); } } });
   });
   root.querySelectorAll("[data-plantoggle]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); toggleTodo(b.dataset.plantoggle); });
+  root.querySelectorAll("[data-planpick]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); chooseDay(b.dataset.planpick); });
   root.querySelectorAll("[data-planremove]").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); const t=S.todos.find(x=>x.id===b.dataset.planremove); if(t){ t.planDay=null; t.updatedAt=Date.now(); save(); render(); } });
   root.querySelectorAll("[data-planopen]").forEach(el=>el.onclick=()=>openTodoInTab(el.dataset.planopen));
 }
@@ -2147,12 +2150,15 @@ function bindBento(root){
     const arm=()=>w.setAttribute("draggable","true");
     grip.addEventListener("mousedown",arm);
     grip.addEventListener("touchstart",arm,{passive:true});
-    w.addEventListener("dragstart",e=>{ dragId=w.dataset.w; try{ e.dataTransfer.setData("text/plain",dragId); e.dataTransfer.effectAllowed="move"; }catch(_){ } });
+    // Nur reagieren, wenn die KACHEL selbst gezogen wird – nicht, wenn ein verschachtelter
+    // Drag (z.B. ein To-do-Chip im Tagesplan) nur durchblubbert. Sonst würden die Drag-Daten
+    // überschrieben und das Verschieben der To-dos bliebe wirkungslos.
+    w.addEventListener("dragstart",e=>{ if(e.target!==w) return; dragId=w.dataset.w; try{ e.dataTransfer.setData("text/plain",dragId); e.dataTransfer.effectAllowed="move"; }catch(_){ } });
     w.addEventListener("dragend",()=>{ w.setAttribute("draggable","false"); dragId=null; root.querySelectorAll(".widget.drop-before").forEach(x=>x.classList.remove("drop-before")); });
-    w.addEventListener("dragover",e=>{ e.preventDefault(); w.classList.add("drop-before"); });
+    w.addEventListener("dragover",e=>{ if(!dragId) return; e.preventDefault(); w.classList.add("drop-before"); });
     w.addEventListener("dragleave",e=>{ if(e.target===w) w.classList.remove("drop-before"); });
-    w.addEventListener("drop",e=>{ e.preventDefault(); w.classList.remove("drop-before"); let src=dragId; try{ src=e.dataTransfer.getData("text/plain")||dragId; }catch(_){ } const dst=w.dataset.w;
-      if(src&&dst&&src!==dst){ const ord=ovOrder(); ord.splice(ord.indexOf(src),1); ord.splice(ord.indexOf(dst),0,src); S.ovWidgetOrder=ord; save(); render(); } });
+    w.addEventListener("drop",e=>{ if(!dragId) return; e.preventDefault(); w.classList.remove("drop-before"); const src=dragId; const dst=w.dataset.w;
+      const ord=ovOrder(); if(src&&dst&&src!==dst && ord.indexOf(src)>=0){ ord.splice(ord.indexOf(src),1); ord.splice(ord.indexOf(dst),0,src); S.ovWidgetOrder=ord; save(); render(); } });
   });
 }
 
@@ -4698,7 +4704,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-11-05.47";
+const APP_VERSION="2026-11-05.48";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
