@@ -1334,6 +1334,7 @@ function todoCard(t, showArea, board){
       </div>
       <button class="mitstar ${t.mit?"on":""}" data-act="mit" title="Most Important Task (⭐)">${t.mit?"★":"☆"}</button>
       <button class="planbtn ${t.planDay?"on":""}" data-act="planday" title="In Tagesplan legen">🗓</button>
+      <button class="planbtn ${t.someday?"on":""}" data-act="someday" title="${t.someday?"Zurück zu aktiv":"Nach Irgendwann/Später verschieben"}">💤</button>
       <button class="chev" data-act="open">${t.open?"▲":"▼"}</button>
     </div>
     <div class="todo-detail">
@@ -1415,6 +1416,7 @@ function bindTodos(root){
         if(act==="toggle"){ ev.stopPropagation(); toggleTodo(id); return; }
         if(act==="mit"){ ev.stopPropagation(); t.mit=!t.mit; t.updatedAt=Date.now(); save(); render(); toast(t.mit?"Als MIT markiert ⭐":"MIT entfernt"); return; }
         if(act==="planday"){ ev.stopPropagation(); chooseDay(id); return; }
+        if(act==="someday"){ ev.stopPropagation(); t.someday=!t.someday; if(t.someday){ t.planDay=null; t.mit=false; } t.updatedAt=Date.now(); save(); render(); toast(t.someday?"Nach Irgendwann verschoben 💤":"Zurück zu aktiv"); return; }
         if(act==="movecol"){ ev.stopPropagation(); chooseColumn(id); return; }
         if(act==="open"){ t.open=!t.open; save(); render(); return; }
         if(act==="del"){ uiConfirm("To-do löschen?","Löschen").then(ok=>{ if(ok) delTodo(id); }); return; }
@@ -2155,6 +2157,12 @@ function bindBento(root){
 }
 
 /* ============================ VIEW: OVERVIEW ============================ */
+function somedaySectionHTML(list, showArea){
+  if(!list.length) return "";
+  const open=!!S.ui.somedayOpen;
+  const inner = open ? [...list].sort((a,b)=>urgency(b)-urgency(a)).map(t=>todoCard(t,showArea)).join("") : "";
+  return `<div class="ovsec-head" id="somedayHead" style="cursor:pointer"><span class="ovsec-title">💤 Irgendwann / Später</span><span class="tiny muted">${list.length} · ${open?"▴ einklappen":"▾ anzeigen"}</span></div>${inner}`;
+}
 function viewOverview(){
   const open=S.todos.filter(t=>todoOpen(t));
   const sorted=[...open].sort((a,b)=>urgency(b)-urgency(a));
@@ -2172,48 +2180,64 @@ function viewOverview(){
   const dgCollapsed=!!S.ui.dayGoalCollapsed;
   const qCollapsed=!!S.ui.qaddCollapsed;
   const mitDoneToday=S.todos.filter(t=>t.mit && todoDoneToday(t)).length;
+  const focus=!!S.ui.ovFocus;
+  const activeOpen=S.todos.filter(t=>todoOpen(t)&&!t.someday);
+  const somedayList=S.todos.filter(t=>todoOpen(t)&&t.someday);
+  const dcat=t=>{ const d=daysUntil(t.dueDate); if(d!==null && d<=0) return "heute"; if(d===1) return "morgen"; return "rest"; };
+  const dstr=(off)=>{ const dd=new Date(); dd.setDate(dd.getDate()+off); return WD[dd.getDay()]+", "+dd.getDate()+"."+(dd.getMonth()+1)+"."; };
+
   let html=`<div class="row center" style="justify-content:space-between; flex-wrap:wrap; gap:6px">
       <div class="view-title">Übersicht</div>
       <div class="row" style="gap:4px; flex-wrap:wrap">
-        <button class="btn ghost sm" id="ovBoardToggle" title="Ansicht wechseln">${ovBoard?"☰ Liste":"▦ Spalten"}</button>
+        <button class="btn ghost sm" id="ovFocusToggle" title="Fokusmodus – nur Heute">${focus?"🔎 Alles":"🎯 Fokus"}</button>
+        ${focus?"":`<button class="btn ghost sm" id="ovBoardToggle" title="Ansicht wechseln">${ovBoard?"☰ Liste":"▦ Spalten"}</button>`}
       </div>
     </div>
-    <div class="view-sub">${WD[new Date().getDay()]}, ${new Date().toLocaleDateString("de-DE")} · ${open.length} offen · ${(S.todos.filter(t=>todoDone(t)).length)?`<span class="donelink" data-jumpdone="overview">heute ${doneToday} erledigt ↓</span>`:`heute ${doneToday} erledigt`} ✓</div>
+    <div class="view-sub">${WD[new Date().getDay()]}, ${new Date().toLocaleDateString("de-DE")} · ${activeOpen.length} offen${somedayList.length?` · 💤 ${somedayList.length} irgendwann`:""} · ${(S.todos.filter(t=>todoDone(t)).length)?`<span class="donelink" data-jumpdone="overview">heute ${doneToday} erledigt ↓</span>`:`heute ${doneToday} erledigt`} ✓</div>`;
 
-    ${renderBento()}
+  if(focus){
+    const heute=activeOpen.filter(t=>dcat(t)==="heute").sort((a,b)=>urgency(b)-urgency(a));
+    html+=`<div class="card" style="margin-bottom:12px"><div style="font-weight:700; margin-bottom:8px">🗓 Tagesplan</div>${tagesplanBody()}</div>`;
+    html+=mitStripHTML();
+    html+=`<div class="ovsec-head"><span class="ovsec-title">Heute</span><span class="tiny muted">${dstr(0)} · ${heute.length} offen</span></div>`;
+    html+= heute.length ? heute.map(t=>todoCard(t,true)).join("") : `<div class="tiny muted" style="padding:4px 2px 8px">Nichts für heute. Genieß den Moment 🙂</div>`;
+    const rest=activeOpen.length-heute.length;
+    html+=`<div class="tiny muted" style="text-align:center; margin-top:16px">Fokusmodus – ${rest>0?(rest+" weitere offene To-dos ausgeblendet"):"alles Offene ist für heute"}. <a class="link" href="#" id="focusOff">Alles anzeigen</a></div>`;
+  } else {
+    html+=`${renderBento()}
 
     ${sprintCardHTML()}
 
     ${mitStripHTML()}`;
-
-  // Zeit-Abschnitte: Heute · Morgen · Ab Übermorgen (überfällige zählen zu „Heute")
-  const openAll=S.todos.filter(t=>todoOpen(t));
-  const dcat=t=>{ const d=daysUntil(t.dueDate); if(d!==null && d<=0) return "heute"; if(d===1) return "morgen"; return "rest"; };
-  const dstr=(off)=>{ const dd=new Date(); dd.setDate(dd.getDate()+off); return WD[dd.getDay()]+", "+dd.getDate()+"."+(dd.getMonth()+1)+"."; };
-  const sections=[
-    {key:"heute",  label:"Heute",         sub:dstr(0)},
-    {key:"morgen", label:"Morgen",        sub:dstr(1)},
-    {key:"rest",   label:"Ab Übermorgen", sub:dstr(2)},
-  ];
-  sections.forEach((sec,i)=>{
-    const items=openAll.filter(t=>dcat(t)===sec.key);
-    html+=`<div class="ovsec-head"><span class="ovsec-title">${sec.label}</span><span class="tiny muted">${sec.sub} · ${items.length} offen</span></div>`;
-    if(ovBoard){
-      html+=boardColumnsHTML(items, true, i===0);
-    } else {
-      const sorted=[...items].sort((a,b)=>urgency(b)-urgency(a));
-      html+= sorted.length ? sorted.map(t=>todoCard(t,true)).join("")
-                           : `<div class="tiny muted" style="padding:4px 2px 8px">Keine offenen To-dos.</div>`;
-    }
-    if(i<sections.length-1) html+=`<hr class="ovsep">`;
-  });
-  html+=donePanel(S.todos.filter(t=>todoDone(t)), "overview", true);
+    const sections=[
+      {key:"heute",  label:"Heute",         sub:dstr(0)},
+      {key:"morgen", label:"Morgen",        sub:dstr(1)},
+      {key:"rest",   label:"Ab Übermorgen", sub:dstr(2)},
+    ];
+    sections.forEach((sec,i)=>{
+      const items=activeOpen.filter(t=>dcat(t)===sec.key);
+      html+=`<div class="ovsec-head"><span class="ovsec-title">${sec.label}</span><span class="tiny muted">${sec.sub} · ${items.length} offen</span></div>`;
+      if(ovBoard){
+        html+=boardColumnsHTML(items, true, i===0);
+      } else {
+        const sorted=[...items].sort((a,b)=>urgency(b)-urgency(a));
+        html+= sorted.length ? sorted.map(t=>todoCard(t,true)).join("")
+                             : `<div class="tiny muted" style="padding:4px 2px 8px">Keine offenen To-dos.</div>`;
+      }
+      if(i<sections.length-1) html+=`<hr class="ovsep">`;
+    });
+    html+=somedaySectionHTML(somedayList, true);
+    html+=donePanel(S.todos.filter(t=>todoDone(t)), "overview", true);
+  }
 
   const v=$("#view"); v.innerHTML=html;
   bindTodos(v); bindDone(v); bindSprint(v); bindMit(v);
   bindBento(v); bindTagesplan(v); bindRoutineStrip(v); bindPlan(v);
   if(ovBoard) bindBoard(v);
   const ob=$("#ovBoardToggle"); if(ob) ob.onclick=()=>{ S.ui.ovBoard=!S.ui.ovBoard; save(); render(); };
+  const oft=$("#ovFocusToggle"); if(oft) oft.onclick=()=>{ S.ui.ovFocus=!S.ui.ovFocus; save(); render(); };
+  const fo=$("#focusOff"); if(fo) fo.onclick=(e)=>{ e.preventDefault(); S.ui.ovFocus=false; save(); render(); };
+  const sh=$("#somedayHead"); if(sh) sh.onclick=()=>{ S.ui.somedayOpen=!S.ui.somedayOpen; save(); render(); };
   // Tagesziel
   const dgm=$("#dgMinus"); if(dgm) dgm.onclick=(e)=>{ e.stopPropagation(); S.dayGoal=Math.max(1,(S.dayGoal||5)-1); save(); render(); };
   const dgp=$("#dgPlus"); if(dgp) dgp.onclick=(e)=>{ e.stopPropagation(); S.dayGoal=Math.min(20,(S.dayGoal||5)+1); save(); render(); };
@@ -2250,7 +2274,7 @@ function viewArea(id){
   const a=areaById(id);
   if(!a){ go("overview"); return; }
   const mine=S.todos.filter(t=>t.areaId===id);
-  const openT=mine.filter(t=>todoOpen(t)), doneT=mine.filter(t=>todoDone(t));
+  const openT=mine.filter(t=>todoOpen(t)&&!t.someday), somedayT=mine.filter(t=>todoOpen(t)&&t.someday), doneT=mine.filter(t=>todoDone(t));
 
   // group by project
   const groups={}; const noProj=[];
@@ -2354,6 +2378,7 @@ function viewArea(id){
 
   if(!openT.length && !projectNames.length) html+=`<div class="empty">Noch keine To-dos in „${esc(a.name)}". Leg oben eins an.</div>`;
 
+  html+=somedaySectionHTML(somedayT, false);
   html+=donePanel(doneT, "area:"+id, false);
   } // Ende Listen-Ansicht
 
@@ -2393,6 +2418,7 @@ function viewArea(id){
   bindTodos(v);
   bindDone(v);
   if(board) bindBoard(v);
+  const shA=$("#somedayHead"); if(shA) shA.onclick=()=>{ S.ui.somedayOpen=!S.ui.somedayOpen; save(); render(); };
 }
 async function editArea(a){
   const r=await uiPrompt("Bereich bearbeiten",[
@@ -4482,6 +4508,7 @@ function _prMetaLine(t){
   if(t.followUpDate) bits.push("Nachhaken: "+fmtDate(t.followUpDate));
   if(t.daily) bits.push("↻ täglich"); else { const rl=repeatLabel(t.repeat); if(rl) bits.push("↻ "+rl); }
   if(t.planDay) bits.push("🗓 "+fmtDate(t.planDay));
+  if(t.someday) bits.push("💤 Irgendwann");
   if((t.attachments||[]).length) bits.push("📎 "+t.attachments.length);
   return bits.join("  ·  ");
 }
@@ -4671,7 +4698,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-11-05.46";
+const APP_VERSION="2026-11-05.47";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
