@@ -225,6 +225,29 @@
   .k-sport{background:rgba(53,194,201,.22)}
   .k-privat{background:rgba(183,140,255,.22)}
   .k-sonst{background:rgba(154,163,178,.20)}
+  /* ===== Druck-/PDF-Export der To-do-Liste ===== */
+  #printArea{display:none}
+  @media print{
+    html, body{ background:#fff !important; }
+    body.printing *{ visibility:hidden !important; }
+    body.printing #printArea, body.printing #printArea *{ visibility:visible !important; }
+    body.printing #printArea{ display:block !important; position:absolute; left:0; top:0; width:100%; }
+    @page{ margin:14mm; }
+    #printArea .pr-todo{ break-inside:avoid; }
+    #printArea .pr-section, #printArea .pr-h1, #printArea .pr-h2{ break-after:avoid; }
+  }
+  #printArea{ color:#111; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; font-size:12px; line-height:1.45 }
+  #printArea .pr-title{ font-size:20px; font-weight:800 }
+  #printArea .pr-sub{ color:#555; font-size:11.5px; margin:2px 0 6px }
+  #printArea .pr-section{ font-size:16px; font-weight:800; margin:16px 0 6px }
+  #printArea .pr-h1{ font-size:14px; font-weight:800; margin:12px 0 4px; border-bottom:1.5px solid #111; padding-bottom:2px }
+  #printArea .pr-h2{ font-size:12px; font-weight:700; color:#333; margin:8px 0 2px }
+  #printArea .pr-todo{ display:flex; gap:7px; padding:3px 0; border-bottom:1px solid #eee }
+  #printArea .pr-box{ flex:0 0 auto }
+  #printArea .pr-main{ flex:1 1 auto }
+  #printArea .pr-meta{ color:#555; font-size:10.5px }
+  #printArea .pr-note{ color:#444; font-size:10.5px; margin-top:1px; white-space:pre-wrap }
+  #printArea .pr-star{ color:#c08a00 }
   /* 6-Wochen-Thema */
   .spr-stat{display:flex; gap:16px; flex-wrap:wrap; margin:8px 0}
   .spr-stat .n{font-size:20px; font-weight:750}
@@ -533,6 +556,8 @@
           <button class="btn sec grow" id="impBtn">⬆︎ Import (Datei)</button>
         </div>
         <input type="file" id="impFile" accept="application/json,.json" style="display:none">
+        <button class="btn sec" id="pdfTodosBtn" style="width:100%; margin-top:8px">🧾 To-do-Liste als PDF</button>
+        <div class="tiny muted" style="margin-top:4px">Alle To-dos (offen &amp; erledigt) als strukturierte Liste – im Druckdialog „Als PDF speichern" wählen.</div>
         <button class="btn sec" id="restoreBtn" style="width:100%; margin-top:8px">↩︎ Aus lokaler Sicherung wiederherstellen</button>
         <div id="restoreInfo" class="tiny muted" style="margin-top:6px"></div>
         <button class="btn sec" id="histBtn" style="width:100%; margin-top:10px">🕘 Frühere Versionen (dieses Gerät)</button>
@@ -4449,6 +4474,69 @@ async function setPin(pin){
 }
 function clearPin(){ S.security={pinHash:"",pinSalt:""}; save(); }
 
+/* ---- To-do-Liste als PDF (druckbarer, strukturierter Report) ---- */
+function _prMetaLine(t){
+  const bits=[];
+  const pr={3:"Hoch",2:"Mittel",1:"Niedrig"}[t.priority]; if(pr) bits.push("Prio: "+pr);
+  if(t.dueDate) bits.push("Frist: "+fmtDate(t.dueDate));
+  if(t.followUpDate) bits.push("Nachhaken: "+fmtDate(t.followUpDate));
+  if(t.daily) bits.push("↻ täglich"); else { const rl=repeatLabel(t.repeat); if(rl) bits.push("↻ "+rl); }
+  if(t.planDay) bits.push("🗓 "+fmtDate(t.planDay));
+  if((t.attachments||[]).length) bits.push("📎 "+t.attachments.length);
+  return bits.join("  ·  ");
+}
+function _prTodoRow(t){
+  const star=t.mit?`<span class="pr-star">★ </span>`:"";
+  const meta=_prMetaLine(t);
+  const note=t.notes?`<div class="pr-note">${esc(t.notes)}</div>`:"";
+  return `<div class="pr-todo"><div class="pr-box">☐</div><div class="pr-main"><div>${star}${esc(t.title)}</div>${meta?`<div class="pr-meta">${esc(meta)}</div>`:""}${note}</div></div>`;
+}
+function buildTodosReportHTML(){
+  const all=S.todos||[];
+  const open=all.filter(t=>t.done!==true);
+  const done=all.filter(t=>t.done===true);
+  const now=new Date();
+  const sortU=arr=>arr.slice().sort((x,y)=>urgency(y)-urgency(x));
+  // offen: nach Bereich, darin nach Projekt
+  const byArea={}; const noArea=[];
+  open.forEach(t=>{ if(t.areaId && areaById(t.areaId)) (byArea[t.areaId]=byArea[t.areaId]||[]).push(t); else noArea.push(t); });
+  const renderArea=(aid,list)=>{
+    const a=aid?areaById(aid):null; const name=a?`${a.icon||""} ${a.name}`.trim():"Ohne Bereich";
+    let s=`<div class="pr-h1">${esc(name)} <span style="font-weight:400;color:#777">(${list.length})</span></div>`;
+    const byProj={}; const noProj=[];
+    list.forEach(t=>{ if(t.project) (byProj[t.project]=byProj[t.project]||[]).push(t); else noProj.push(t); });
+    sortU(noProj).forEach(t=>s+=_prTodoRow(t));
+    Object.keys(byProj).sort().forEach(p=>{ s+=`<div class="pr-h2">📁 ${esc(p)}</div>`; sortU(byProj[p]).forEach(t=>s+=_prTodoRow(t)); });
+    return s;
+  };
+  let openBody="";
+  (S.areas||[]).forEach(a=>{ if(byArea[a.id]&&byArea[a.id].length) openBody+=renderArea(a.id, byArea[a.id]); });
+  if(noArea.length) openBody+=renderArea(null, noArea);
+  // erledigt: chronologisch, neueste zuerst
+  let doneBody="";
+  if(done.length){
+    const ds=done.slice().sort((a,b)=>String(b.doneAt||"").localeCompare(String(a.doneAt||"")));
+    ds.forEach(t=>{ const a=areaById(t.areaId); const tag=a?` · ${a.name}`:""; doneBody+=`<div class="pr-todo"><div class="pr-box">☑</div><div class="pr-main"><div>${esc(t.title)}</div><div class="pr-meta">${t.doneAt?("erledigt: "+esc(fmtDate(t.doneAt))):"erledigt"}${esc(tag)}</div></div></div>`; });
+  }
+  return `<div class="pr-title">Selbstorga – To-do-Backup</div>
+    <div class="pr-sub">Erstellt am ${now.toLocaleDateString("de-DE")} um ${now.toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"})} Uhr · ${open.length} offen · ${done.length} erledigt</div>
+    <div class="pr-section">Noch zu erledigen (${open.length})</div>
+    ${openBody||`<div class="pr-meta">Keine offenen To-dos.</div>`}
+    <div class="pr-section">Erledigt (${done.length})</div>
+    ${doneBody||`<div class="pr-meta">Noch nichts als erledigt markiert.</div>`}`;
+}
+function exportTodosPDF(){
+  try{
+    let pa=document.getElementById("printArea");
+    if(!pa){ pa=document.createElement("div"); pa.id="printArea"; document.body.appendChild(pa); }
+    pa.innerHTML=buildTodosReportHTML();
+    document.body.classList.add("printing");
+    const cleanup=()=>{ document.body.classList.remove("printing"); window.removeEventListener("afterprint",cleanup); };
+    window.addEventListener("afterprint",cleanup);
+    toast("Druckdialog: „Als PDF speichern“ wählen");
+    setTimeout(()=>{ try{ window.print(); }catch(e){ toast("Drucken nicht möglich"); } setTimeout(cleanup,2000); }, 80);
+  }catch(e){ toast("Export fehlgeschlagen"); }
+}
 /* ---- Sicherung / Export / Import ---- */
 function exportData(){
   try{
@@ -4544,6 +4632,7 @@ $("#expBtn").onclick=exportData;
 $("#impBtn").onclick=()=>$("#impFile").click();
 $("#impFile").onchange=e=>{ if(e.target.files&&e.target.files[0]) importFile(e.target.files[0]); e.target.value=""; };
 $("#restoreBtn").onclick=restoreBackup;
+$("#pdfTodosBtn").onclick=()=>{ $("#settingsSheet").classList.remove("open"); setTimeout(exportTodosPDF, 150); };
 $("#histBtn").onclick=renderHistList;
 $("#srvHistBtn").onclick=loadServerHistory;
 $("#pinSet").onclick=async ()=>{ const inp=$("#pinInput"); const ok=await setPin(inp.value); if(ok){ inp.value=""; const st=$("#pinStatus"); if(st){ st.textContent="PIN aktiv ✓"; st.style.color="var(--good)"; } toast("PIN gesetzt 🔒"); } };
@@ -4582,7 +4671,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-11-04.45";
+const APP_VERSION="2026-11-05.46";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
