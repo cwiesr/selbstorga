@@ -1994,7 +1994,7 @@ function tagesplanBody(){
     const b=planBlockAt(date,m); const hour=m%60===0;
     let slot;
     if(b){ const first=_hhmm2m(b.start)===m; const kind=PLAN_KINDS.find(x=>x.k===b.kind)||PLAN_KINDS[5];
-      slot=`<div class="tp-slot blk k-${kind.k} ${first?"":"cont"}" data-pb="${b.id}">${first?`<span>${kind.emoji}</span><span class="lbl">${esc(b.label||kind.label)}</span><span class="tiny muted" style="margin-left:auto">${b.start}–${b.end}</span>`:""}</div>`;
+      slot=`<div class="tp-slot blk k-${kind.k} ${first?"":"cont"}" data-pb="${b.id}">${first?`<span>${kind.emoji}</span><span class="lbl">${esc(b.label||kind.label)}</span>${b.note?`<span title="${esc(b.note)}" style="margin-left:auto">📝</span><span class="tiny muted" style="margin-left:5px">${b.start}–${b.end}</span>`:`<span class="tiny muted" style="margin-left:auto">${b.start}–${b.end}</span>`}`:""}</div>`;
     } else { slot=`<div class="tp-slot free" data-pslot="${_m2hhmm(m)}">${hour?"+":""}</div>`; }
     rows+=`<div class="tp-row ${hour?"hr":""}"><div class="tp-t ${hour?"":"half"}">${_m2hhmm(m)}</div>${slot}</div>`;
   }
@@ -2027,6 +2027,7 @@ function openPlanBlock(date, presetStart, id){
       <div class="field"><label>Bis</label><select id="pbEnd">${timeOpts(endM,startM+30)}</select></div>
     </div>
     <div class="field"><label>Kategorie</label><select id="pbKind">${PLAN_KINDS.map(k=>`<option value="${k.k}" ${ (b?b.kind===k.k:k.k==="arbeit")?"selected":""}>${k.emoji} ${k.label}</option>`).join("")}</select></div>
+    <div class="field"><label>Notiz (optional)</label><textarea id="pbNote" placeholder="Details, Kontext, Link …" style="min-height:60px">${esc(b?(b.note||""):"")}</textarea></div>
     ${b?`<button class="btn danger" id="pbDel" style="width:100%; margin-top:4px">Block löschen</button>`:""}`;
   const m=$("#modal"); m.classList.add("open"); $("#modalOk").textContent="Speichern";
   const close=()=>{ closeModal(); $("#modalOk").textContent="OK"; };
@@ -2036,8 +2037,9 @@ function openPlanBlock(date, presetStart, id){
     const sm=+$("#pbStart").value, em=+$("#pbEnd").value;
     if(em<=sm){ toast("Ende muss nach Beginn liegen"); return; }
     const label=$("#pbLabel").value.trim(); const kind=$("#pbKind").value;
-    if(b){ b.start=_m2hhmm(sm); b.end=_m2hhmm(em); b.label=label; b.kind=kind; b.updatedAt=Date.now(); }
-    else { S.planBlocks.push({id:uid(), date, start:_m2hhmm(sm), end:_m2hhmm(em), label, kind, updatedAt:Date.now()}); }
+    const note=($("#pbNote")?$("#pbNote").value.trim():"");
+    if(b){ b.start=_m2hhmm(sm); b.end=_m2hhmm(em); b.label=label; b.kind=kind; b.note=note; b.updatedAt=Date.now(); }
+    else { S.planBlocks.push({id:uid(), date, start:_m2hhmm(sm), end:_m2hhmm(em), label, kind, note, updatedAt:Date.now()}); }
     save(); render(); close(); toast("Gespeichert");
   };
   $("#modalOk").onclick=saveB;
@@ -4704,7 +4706,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-11-05.48";
+const APP_VERSION="2026-11-11.49";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
