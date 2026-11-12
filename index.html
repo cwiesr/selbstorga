@@ -3649,9 +3649,18 @@ async function pushUnsubscribe(){
   }catch(e){ toast("Fehler: "+(e.message||e)); }
 }
 async function pushTest(){
-  try{ const reg=await navigator.serviceWorker.ready; const sub=await reg.pushManager.getSubscription(); if(!sub){ toast("Kein Abo auf diesem Gerät"); return; }
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.getSubscription();
+    if(!sub){ toast("Kein Abo auf diesem Gerät – bitte neu aktivieren"); S.ui.pushOn=false; save(); render(); return; }
     const r=await fetch("/api/push?test=1",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({endpoint:sub.endpoint})});
-    toast(r.ok?"Testnachricht unterwegs":"Server-Fehler "+r.status);
+    let j={}; try{ j=await r.json(); }catch(_){}
+    if(r.status===404){ toast("Abo nicht gefunden – bitte neu aktivieren"); return; }
+    if(!r.ok){ toast("Server-Fehler "+r.status+(j&&j.error?": "+j.error:"")); return; }
+    const res=j&&j.result;
+    if(res==="ok"){ toast("Test gesendet ✓ – kommt gleich an. (Kein Ton? iOS-Einstellungen prüfen.)"); }
+    else if(res==="gone"){ toast("Abo abgelaufen – bitte neu aktivieren"); S.ui.pushOn=false; save(); render(); }
+    else { toast("Zustellung fehlgeschlagen ("+(res||"unbekannt")+")"); }
   }catch(e){ toast("Fehler: "+(e.message||e)); }
 }
 
@@ -4725,7 +4734,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-11-12.50";
+const APP_VERSION="2026-11-12.51";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
