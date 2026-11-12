@@ -2010,6 +2010,13 @@ function tagesplanBody(){
     <div class="tp">${rows}</div>
     <div class="tiny muted" style="margin-top:6px">Freies 30-Min-Fenster antippen zum Blocken · Block antippen zum Ändern</div>`;
 }
+function _gcalUrl(dateIso, startHHMM, endHHMM, title, details){
+  const d=String(dateIso).replace(/-/g,"");
+  const s=d+"T"+String(startHHMM).replace(":","")+"00";
+  const e=d+"T"+String(endHHMM).replace(":","")+"00";
+  const p=new URLSearchParams({action:"TEMPLATE", text:(title||"Termin"), dates:s+"/"+e, details:(details||""), ctz:"Europe/Berlin"});
+  return "https://calendar.google.com/calendar/render?"+p.toString();
+}
 function openPlanBlock(date, presetStart, id){
   S.planBlocks=S.planBlocks||[];
   const b = id ? S.planBlocks.find(x=>x.id===id) : null;
@@ -2028,7 +2035,11 @@ function openPlanBlock(date, presetStart, id){
     </div>
     <div class="field"><label>Kategorie</label><select id="pbKind">${PLAN_KINDS.map(k=>`<option value="${k.k}" ${ (b?b.kind===k.k:k.k==="arbeit")?"selected":""}>${k.emoji} ${k.label}</option>`).join("")}</select></div>
     <div class="field"><label>Notiz (optional)</label><textarea id="pbNote" placeholder="Details, Kontext, Link …" style="min-height:60px">${esc(b?(b.note||""):"")}</textarea></div>
-    ${b?`<button class="btn danger" id="pbDel" style="width:100%; margin-top:4px">Block löschen</button>`:""}`;
+    <div class="row" style="gap:8px; margin-top:6px">
+      ${b?`<button class="btn sec sm grow" id="pbNextDay" title="Diesen Block auf den nächsten Tag verschieben">→ Nächster Tag</button>`:""}
+      <button class="btn sec sm grow" id="pbGCal" title="Als Termin in Google Kalender öffnen">📅 Google Kalender</button>
+    </div>
+    ${b?`<button class="btn danger" id="pbDel" style="width:100%; margin-top:8px">Block löschen</button>`:""}`;
   const m=$("#modal"); m.classList.add("open"); $("#modalOk").textContent="Speichern";
   const close=()=>{ closeModal(); $("#modalOk").textContent="OK"; };
   const sEl=$("#pbStart"), eEl=$("#pbEnd");
@@ -2044,6 +2055,14 @@ function openPlanBlock(date, presetStart, id){
   };
   $("#modalOk").onclick=saveB;
   $("#modalCancel").onclick=close; $("#modalX").onclick=close; m.onclick=e=>{ if(e.target.id==="modal") close(); };
+  const nd=$("#pbNextDay"); if(nd) nd.onclick=()=>{ if(!b) return; b.date=addDaysISO(b.date,1); b.updatedAt=Date.now(); save(); render(); close(); toast("Auf "+fmtDate(b.date)+" verschoben"); };
+  const gc=$("#pbGCal"); if(gc) gc.onclick=()=>{
+    const sm=+$("#pbStart").value, em=+$("#pbEnd").value;
+    if(em<=sm){ toast("Ende muss nach Beginn liegen"); return; }
+    const url=_gcalUrl(b?b.date:date, _m2hhmm(sm), _m2hhmm(em), ($("#pbLabel").value.trim()||"Termin"), ($("#pbNote")?$("#pbNote").value.trim():""));
+    try{ window.open(url,"_blank","noopener"); }catch(_){ location.href=url; }
+    toast("Google Kalender geöffnet");
+  };
   const del=$("#pbDel"); if(del) del.onclick=()=>{ tombstone("planBlocks", b.id); S.planBlocks=S.planBlocks.filter(x=>x.id!==b.id); save(); render(); close(); toast("Block gelöscht"); };
 }
 function bindTagesplan(root){
@@ -4706,7 +4725,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-11-11.49";
+const APP_VERSION="2026-11-12.50";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
