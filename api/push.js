@@ -31,14 +31,18 @@ function ensureTables(p) {
 
 /* Erinnerungen – Berliner Zeit. Das Fenster ist 30 Minuten breit, damit auch ein verspäteter Auslöser trifft;
    push_log sorgt dafür, dass jede Erinnerung trotzdem nur einmal pro Tag rausgeht. */
+// window = Nachhol-Fenster in Minuten ab der Zielzeit. Bewusst breit, weil der Auslöser
+// (GitHub-Actions-Zeitplan) oft nur alle paar Stunden läuft; so wird die Erinnerung auch bei
+// einem verspäteten Lauf noch zugestellt. push_log sorgt für max. 1x pro Tag. Nacht-Grenze
+// (abends bis 23:30) verhindert Zustellung mitten in der Nacht.
 const REMINDERS = [
-  { id: 'abend',  hour: 21, minute: 0,  when: () => true,
+  { id: 'abend',  hour: 21, minute: 0,  window: 150, when: () => true,
     title: 'Was war heute schön?', body: '2 Minuten. Eine Antwort reicht.', url: '/?open=abend' },
-  { id: 'woche',  hour: 18, minute: 0,  when: (b) => b.weekday === 'Sun',
+  { id: 'woche',  hour: 18, minute: 0,  window: 240, when: (b) => b.weekday === 'Sun',
     title: '10 Minuten für dein Leben', body: 'Was hat diese Woche gutgetan?', url: '/?open=woche' },
-  { id: 'monat',  hour: 18, minute: 15, when: (b) => b.weekday === 'Sun' && b.day <= 7,
+  { id: 'monat',  hour: 18, minute: 15, window: 225, when: (b) => b.weekday === 'Sun' && b.day <= 7,
     title: 'Was möchtest du diesen Monat erleben?', body: '20 Minuten Gestaltung – dann steht es im Kalender.', url: '/?open=monat' },
-  { id: 'things', hour: 18, minute: 0,  when: (b) => b.day === 15,
+  { id: 'things', hour: 18, minute: 0,  window: 240, when: (b) => b.day === 15,
     title: '10 Minuten Inspiration', body: 'Was fehlt auf deiner 100 Things? Was reizt dich gerade?', url: '/?open=things' },
 ];
 const WINDOW_MIN = 30;
@@ -51,7 +55,7 @@ export function berlinNow(d = new Date()) {
 }
 export function dueReminders(b) {
   const now = b.hour * 60 + b.minute;
-  return REMINDERS.filter(r => { const start = r.hour * 60 + r.minute; return r.when(b) && now >= start && now < start + WINDOW_MIN; });
+  return REMINDERS.filter(r => { const start = r.hour * 60 + r.minute; return r.when(b) && now >= start && now < start + (r.window || WINDOW_MIN); });
 }
 
 async function vapidKeys(p) {
