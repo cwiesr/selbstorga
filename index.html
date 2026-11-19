@@ -225,6 +225,14 @@
   .k-sport{background:rgba(53,194,201,.22)}
   .k-privat{background:rgba(183,140,255,.22)}
   .k-sonst{background:rgba(154,163,178,.20)}
+  /* Übersicht: große Zahl offener To-dos + Veränderung */
+  .ov-count-top{display:flex; align-items:baseline; gap:8px; flex-wrap:wrap}
+  .ov-count-n{font-size:42px; font-weight:800; line-height:1; letter-spacing:-.02em}
+  .ov-count-lbl{font-size:13px; color:var(--muted); font-weight:600}
+  .ov-deltas{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px}
+  .ov-delta{font-size:11.5px; font-weight:700; padding:2px 9px; border-radius:999px; border:1px solid var(--border); background:var(--panel2); color:var(--muted)}
+  .ov-delta.up{color:var(--warn); border-color:var(--warn); background:rgba(245,165,36,.12)}
+  .ov-delta.down{color:var(--good); border-color:var(--good); background:rgba(70,201,139,.12)}
   /* ===== Druck-/PDF-Export der To-do-Liste ===== */
   #printArea{display:none}
   @media print{
@@ -782,7 +790,7 @@ function compassOfDay(){ const list=compassList(); if(!list.length) return null;
 function ensureState(){
   const defs={ mindAnswers:{}, mindDayQ:{}, mindDayR:{}, mindDayQuote:{}, mindAskedQ:[], mindAskedR:[],
     mindAskedQuote:[], valuesDayQ:{}, valuesAns:{}, valuesAsked:[], mood:{}, compassReminders:[], compassLeitidee:"",
-    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], relationship:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[], tabLabels:{}, dayGoalLog:{}, players:[], lessons:[], sprints:[],
+    savedReminders:[], savedQuotes:[], goals:[], myThoughts:[], dismissedGoalSug:[], bookmarks:[], thoughts:[], relationship:[], creed:"", security:{pinHash:"",pinSalt:""}, deleted:{}, tabOrder:[], tabLabels:{}, dayGoalLog:{}, openCountLog:{}, players:[], lessons:[], sprints:[],
     /* Bereich Leben (Life OS) – neue Sammlungen, alle synchronisiert */
     intake:[],        // Eingang: {id,text,ts,status:'open'|'filed'|'kept',target,targetId,updatedAt}
     alive:[],         // Things That Make Me Feel Alive: {id,text,date,updatedAt}
@@ -2213,14 +2221,28 @@ function viewOverview(){
   const dcat=t=>{ const d=daysUntil(t.dueDate); if(d!==null && d<=0) return "heute"; if(d===1) return "morgen"; return "rest"; };
   const dstr=(off)=>{ const dd=new Date(); dd.setDate(dd.getDate()+off); return WD[dd.getDay()]+", "+dd.getDate()+"."+(dd.getMonth()+1)+"."; };
 
-  let html=`<div class="row center" style="justify-content:space-between; flex-wrap:wrap; gap:6px">
-      <div class="view-title">Übersicht</div>
+  const openNow=activeOpen.length;
+  const _ocl=S.openCountLog||{};
+  const _yVal=_ocl[addDaysISO(todayStr(),-1)];
+  const _wVal=_ocl[addDaysISO(todayStr(),-7)];
+  const deltaChip=(prev,label)=>{
+    if(prev==null) return `<span class="ov-delta" title="Noch keine Vergleichsdaten – wird ab jetzt aufgezeichnet">ggü. ${label}: –</span>`;
+    const d=openNow-prev;
+    if(d===0) return `<span class="ov-delta">±0 ggü. ${label}</span>`;
+    const up=d>0;   // mehr offene To-dos = mehr auf dem Tisch
+    return `<span class="ov-delta ${up?"up":"down"}" title="vorher ${prev}, jetzt ${openNow}">${up?"▲ +"+d:"▼ "+d} ggü. ${label}</span>`;
+  };
+  let html=`<div class="row center" style="justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px">
+      <div>
+        <div class="ov-count-top"><span class="ov-count-n tnum">${openNow}</span><span class="ov-count-lbl">offene To-dos</span></div>
+        <div class="ov-deltas">${deltaChip(_yVal,"gestern")}${deltaChip(_wVal,"Vorwoche")}</div>
+      </div>
       <div class="row" style="gap:4px; flex-wrap:wrap">
         <button class="btn ghost sm" id="ovFocusToggle" title="Fokusmodus – nur Heute">${focus?"🔎 Alles":"🎯 Fokus"}</button>
         ${focus?"":`<button class="btn ghost sm" id="ovBoardToggle" title="Ansicht wechseln">${ovBoard?"☰ Liste":"▦ Spalten"}</button>`}
       </div>
     </div>
-    <div class="view-sub">${WD[new Date().getDay()]}, ${new Date().toLocaleDateString("de-DE")} · ${activeOpen.length} offen${somedayList.length?` · 💤 ${somedayList.length} irgendwann`:""} · ${(S.todos.filter(t=>todoDone(t)).length)?`<span class="donelink" data-jumpdone="overview">heute ${doneToday} erledigt ↓</span>`:`heute ${doneToday} erledigt`} ✓</div>`;
+    <div class="view-sub">Übersicht · ${WD[new Date().getDay()]}, ${new Date().toLocaleDateString("de-DE")}${somedayList.length?` · 💤 ${somedayList.length} irgendwann`:""} · ${(S.todos.filter(t=>todoDone(t)).length)?`<span class="donelink" data-jumpdone="overview">heute ${doneToday} erledigt ↓</span>`:`heute ${doneToday} erledigt`} ✓</div>`;
 
   if(focus){
     const heute=activeOpen.filter(t=>dcat(t)==="heute").sort((a,b)=>urgency(b)-urgency(a));
@@ -2820,6 +2842,16 @@ function captureDayGoal(){
   if(now.getHours()>=22){ const today=todayStr(); if(!S.dayGoalLog[today]){ S.dayGoalLog[today]={done:doneOnDate(today), goal, ts:Date.now()}; changed=true; } }
   if(changed) save();
   return changed;
+}
+/* Offene-To-dos-Anzahl pro Tag festhalten (für „Veränderung ggü. gestern/Vorwoche") */
+function openCountNow(){ return S.todos.filter(t=>todoOpen(t)&&!t.someday).length; }
+function captureOpenCount(){
+  S.openCountLog=S.openCountLog||{};
+  const today=todayStr(); const n=openCountNow();
+  if(S.openCountLog[today]===n) return false;
+  S.openCountLog[today]=n;
+  const cut=addDaysISO(today,-120); for(const d in S.openCountLog){ if(d<cut) delete S.openCountLog[d]; }
+  save(); return true;
 }
 function rerollReminder(){
   const d=todayStr(); const cur=S.mindDayR[d];
@@ -4386,7 +4418,7 @@ function stateWeight(s){ if(!s) return 0; return (s.todos?s.todos.length:0)+(s.g
 /* ---- Zusammenführung (Merge) auf Eintrags-Ebene ---- */
 const LIST_COLLS=["todos","goals","bookmarks","ideas","wishes","thoughts","relationship","myThoughts","areas","routines","players","lessons","sprints",
   "intake","alive","adventures","builds","sortPairs","planBlocks","compassReminders"];
-const MAP_COLLS=["mindAnswers","mindDayQ","mindDayR","mindDayQuote","valuesDayQ","valuesAns","dayGoalLog","weekly","monthly","lifeMorning"];
+const MAP_COLLS=["mindAnswers","mindDayQ","mindDayR","mindDayQuote","valuesDayQ","valuesAns","dayGoalLog","openCountLog","weekly","monthly","lifeMorning"];
 function _itemTime(it){ return (it&&(it.updatedAt||0))||0; }
 function mergeList(localArr, remoteArr, localTomb, remoteTomb, tombAcc){
   const tomb={};
@@ -4702,12 +4734,12 @@ $("#pinSet").onclick=async ()=>{ const inp=$("#pinInput"); const ok=await setPin
 $("#pinClear").onclick=()=>{ clearPin(); const st=$("#pinStatus"); if(st){ st.textContent="Kein PIN gesetzt"; st.style.color="var(--muted)"; } toast("PIN entfernt"); };
 $("#lockGo").onclick=tryUnlock;
 $("#lockPin").addEventListener("keydown",e=>{ if(e.key==="Enter") tryUnlock(); });
-if(document.addEventListener) document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ lockCheck(); syncAutoPull(true); let c=captureDayGoal(); c=rollForwardPlan()||c; if(c) render(); } });
+if(document.addEventListener) document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ lockCheck(); syncAutoPull(true); let c=captureDayGoal(); c=rollForwardPlan()||c; captureOpenCount(); if(c) render(); } });
 if(window.addEventListener) window.addEventListener("focus",()=>{ syncAutoPull(true); });
-setInterval(()=>{ if(!document.hidden){ syncAutoPull(); let c=captureDayGoal(); c=rollForwardPlan()||c; if(c) render(); } }, 30000);
+setInterval(()=>{ if(!document.hidden){ syncAutoPull(); let c=captureDayGoal(); c=rollForwardPlan()||c; captureOpenCount(); if(c) render(); } }, 30000);
 updateSyncBtn();
 lockCheck();
-captureDayGoal(); rollForwardPlan();
+captureDayGoal(); rollForwardPlan(); captureOpenCount();
 if(S.sync&&S.sync.enabled&&S.sync.pass){ (async()=>{ try{ const pr=await syncPull(); if(pr.status==="pulled") render(); else await syncPush(); }catch(e){} })(); }
 /* Start: immer im Bereich Leben. Ein Deep Link (?open=…) aus einer Erinnerung öffnet direkt die Aktion. */
 (function initMode(){
@@ -4734,7 +4766,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-11-12.51";
+const APP_VERSION="2026-11-19.52";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
