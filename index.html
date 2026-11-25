@@ -485,6 +485,9 @@
   .sres .stitle mark{background:var(--warn); color:#1a1200; border-radius:3px; padding:0 2px}
   .sres-empty{padding:14px 12px; color:var(--muted); font-size:14px}
   .sres-head{padding:8px 12px; font-size:12px; font-weight:700; letter-spacing:.3px; color:var(--muted); background:var(--panel2); position:sticky; top:0}
+  .sres .sres-snip{margin-top:3px; color:var(--muted); font-size:12px; word-break:break-word; line-height:1.35}
+  .sres .sres-snip .slabel{font-weight:600}
+  .sres .sres-snip mark{background:var(--warn); color:#1a1200; border-radius:3px; padding:0 2px}
 </style>
 </head>
 <body>
@@ -1590,7 +1593,7 @@ function searchTodos(q){
   const words=q.toLowerCase().split(/\s+/).filter(Boolean);
   if(!words.length) return [];
   return S.todos.filter(t=>{
-    const hay=((t.title||"")+" "+(t.notes||"")+" "+(t.project||"")).toLowerCase();
+    const hay=((t.title||"")+" "+(t.notes||"")+" "+(t.project||"")+" "+((t.milestones||[]).map(m=>(m&&m.title)||"").join(" "))).toLowerCase();
     return words.every(w=>hay.includes(w));
   });
 }
@@ -1602,6 +1605,28 @@ function _hl(text, q){
     out=out.replace(re,"<mark>$1</mark>");
   });
   return out;
+}
+function _searchSnippet(t, q){
+  const words=q.toLowerCase().split(/\s+/).filter(Boolean);
+  const title=(t.title||"").toLowerCase();
+  if(words.every(w=>title.includes(w))) return "";   // Titel zeigt den Treffer schon
+  const fields=[];
+  if(t.notes) fields.push({label:"Notiz", text:String(t.notes)});
+  (t.milestones||[]).forEach(m=>{ if(m&&m.title) fields.push({label:"Teilschritt", text:String(m.title)}); });
+  if(t.project) fields.push({label:"Projekt", text:String(t.project)});
+  for(const f of fields){
+    const lt=f.text.toLowerCase();
+    const w=words.find(x=>lt.includes(x));
+    if(w){
+      const i=lt.indexOf(w);
+      const start=Math.max(0, i-32);
+      let snip=f.text.slice(start, i+w.length+48);
+      if(start>0) snip="…"+snip;
+      if(i+w.length+48 < f.text.length) snip=snip+"…";
+      return `<div class="sres-snip"><span class="slabel">${f.label}:</span> ${_hl(snip, q)}</div>`;
+    }
+  }
+  return "";
 }
 function renderSearch(q){
   const box=document.getElementById("searchResults");
@@ -1630,6 +1655,7 @@ function renderSearch(q){
       <span class="sicon">${icon}</span>
       <div style="min-width:0">
         <div class="stitle">${_hl(t.title||"", q)}</div>
+        ${_searchSnippet(t, q)}
         <div class="tiny muted" style="margin-top:2px">${meta.join(" · ")}</div>
       </div>
     </div>`;
@@ -4766,7 +4792,7 @@ render();
 
 /* ============================ AUTO-UPDATE (Home-Bildschirm-App) ============================ */
 /* Diese Version. Bei jedem Deploy in index.html UND version.json gleich hochzählen. */
-const APP_VERSION="2026-11-19.52";
+const APP_VERSION="2026-11-25.53";
 let _updating=false;
 async function checkForUpdate(){
   if(_updating) return;
